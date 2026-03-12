@@ -38,6 +38,15 @@ JOB_ROLES = [
     "Product Analyst",
 ]
 
+# LinkedIn actor ignores result-count limits and scrapes ALL matches
+# (~100-500 per role). To control cost, only use the 3 highest-priority
+# roles for LinkedIn. Indeed + Naukri cover the rest cheaply.
+LINKEDIN_ROLES = [
+    "Data Engineer",
+    "Data Analyst",
+    "Business Analyst",
+]
+
 # Apify actor IDs
 ACTORS = {
     "linkedin": "curious_coder~linkedin-jobs-scraper",
@@ -357,22 +366,25 @@ def main():
         log.exception("  ✗ Failed scraping Naukri — skipping")
 
     # ------------------------------------------------------------------
-    # 2. LinkedIn + Indeed — per role (20 actor runs total)
+    # 2. LinkedIn (3 key roles) + Indeed (all 10 roles)
     # ------------------------------------------------------------------
     for role in JOB_ROLES:
         log.info("--- Role: %s ---", role)
 
-        # LinkedIn
-        try:
-            log.info("  Scraping LinkedIn …")
-            jobs = scrape_linkedin(role)
-            log.info("  LinkedIn returned %d jobs for %s", len(jobs), role)
-            added = deduplicate_and_collect(jobs, all_jobs, seen_urls, seen_keys)
-            log.info("  LinkedIn: %d unique added", added)
-        except Exception:
-            log.exception("  ✗ Failed scraping LinkedIn for role '%s' — skipping", role)
+        # LinkedIn — only for high-priority roles (actor is expensive)
+        if role in LINKEDIN_ROLES:
+            try:
+                log.info("  Scraping LinkedIn …")
+                jobs = scrape_linkedin(role)
+                log.info("  LinkedIn returned %d jobs for %s", len(jobs), role)
+                added = deduplicate_and_collect(jobs, all_jobs, seen_urls, seen_keys)
+                log.info("  LinkedIn: %d unique added", added)
+            except Exception:
+                log.exception("  ✗ Failed scraping LinkedIn for role '%s' — skipping", role)
+        else:
+            log.info("  Skipping LinkedIn for '%s' (cost control)", role)
 
-        # Indeed
+        # Indeed — all roles (cheap, pay-per-result, respects limits)
         try:
             log.info("  Scraping Indeed …")
             jobs = scrape_indeed(role)
