@@ -14,7 +14,6 @@ import logging
 from datetime import datetime, date
 
 import requests
-from supabase import create_client, Client
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -128,9 +127,17 @@ def parse_date(value) -> str | None:
     for fmt in ("%Y-%m-%d", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M:%S.%fZ",
                 "%Y-%m-%dT%H:%M:%S%z", "%d-%m-%Y", "%d/%m/%Y", "%b %d, %Y"):
         try:
-            return datetime.strptime(s[:len(fmt)+5], fmt).date().isoformat()
+            return datetime.strptime(s, fmt).date().isoformat()
+        except ValueError:
+            pass
+        # Fallback: try with truncated string for formats shorter than input
+        try:
+            return datetime.strptime(s[:len(fmt) + 5], fmt).date().isoformat()
         except (ValueError, IndexError):
             continue
+    # Last resort: grab first 10 chars if they look like YYYY-MM-DD
+    if len(s) >= 10 and re.match(r"\d{4}-\d{2}-\d{2}", s[:10]):
+        return s[:10]
     return None
 
 
@@ -184,10 +191,17 @@ def scrape_naukri(role: str) -> list[dict]:
         company = item.get("company") or item.get("companyName") or ""
         if not title or not company:
             continue
+        # Resolve location safely — placeholders may be a list or absent
+        placeholders = item.get("placeholders")
+        if isinstance(placeholders, list) and len(placeholders) > 0:
+            loc = item.get("location") or placeholders[0].get("value", "")
+        else:
+            loc = item.get("location", "")
+
         jobs.append({
             "title":       title,
             "company":     company,
-            "location":    item.get("location") or item.get("placeholders", [{}])[0].get("value", "") if isinstance(item.get("placeholders"), list) else item.get("location", ""),
+            "location":    loc,
             "url":         item.get("url") or item.get("jdURL") or "",
             "platform":    "Naukri",
             "role_type":   role,
@@ -232,13 +246,26 @@ def scrape_indeed(role: str) -> list[dict]:
 # Main
 # ---------------------------------------------------------------------------
 
+def supabase_upsert(rows: list[dict]):
+    """
+    Upsert rows into the 'jobs' table via Supabase REST API (PostgREST).
+    Uses the Prefer header for merge-duplicates on the dedup_key column.
+    """
+    url = f"{SUPABASE_URL}/rest/v1/jobs?on_conflict=dedup_key"
+    headers = {
+        "apikey": SUPABASE_KEY,
+        "Authorization": f"Bearer {SUPABASE_KEY}",
+        "Content-Type": "application/json",
+        "Prefer": "resolution=merge-duplicates",
+    }
+    resp = requests.post(url, json=rows, headers=headers, timeout=30)
+    resp.raise_for_status()
+
+
 def main():
     log.info("=" * 60)
     log.info("Job Dashboard Scraper — started at %s", datetime.utcnow().isoformat())
     log.info("=" * 60)
-
-    # Initialize Supabase client
-    supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
     all_jobs: list[dict] = []
     seen_urls: set[str]  = set()      # Layer 1: within-platform dedup by URL
@@ -289,17 +316,14 @@ def main():
     log.info("=" * 60)
     log.info("Total unique jobs after dedup: %d", len(all_jobs))
 
-    # Layer 3: upsert to Supabase (dedup_key is UNIQUE, so duplicates
-    # against existing rows are handled automatically via upsert)
+    # Layer 3: upsert to Supabase via REST API (dedup_key is UNIQUE,
+    # so duplicates are handled automatically via merge-duplicates)
     if all_jobs:
-        # Upsert in batches of 50
         batch_size = 50
         for i in range(0, len(all_jobs), batch_size):
             batch = all_jobs[i : i + batch_size]
             try:
-                supabase.table("jobs").upsert(
-                    batch, on_conflict="dedup_key"
-                ).execute()
+                supabase_upsert(batch)
                 log.info("  Upserted batch %d–%d", i + 1, min(i + batch_size, len(all_jobs)))
             except Exception:
                 log.exception("  ✗ Failed to upsert batch %d–%d", i + 1, min(i + batch_size, len(all_jobs)))
