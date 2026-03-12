@@ -40,9 +40,9 @@ JOB_ROLES = [
 
 # Apify actor IDs
 ACTORS = {
-    "linkedin": "curious_coder/linkedin-jobs-scraper",
-    "naukri":   "codemaverick/naukri-job-scraper-latest",
-    "indeed":   "valig/indeed-jobs-scraper",
+    "linkedin": "curious_coder~linkedin-jobs-scraper",
+    "naukri":   "codemaverick~naukri-job-scraper-latest",
+    "indeed":   "valig~indeed-jobs-scraper",
 }
 
 POLL_INTERVAL = 5   # seconds between status polls
