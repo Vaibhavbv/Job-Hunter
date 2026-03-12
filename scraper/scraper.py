@@ -146,7 +146,7 @@ def parse_date(value) -> str | None:
 # ---------------------------------------------------------------------------
 
 def scrape_linkedin(role: str) -> list[dict]:
-    """Scrape LinkedIn jobs for a given role."""
+    """Scrape LinkedIn jobs for a given role. Limited to 5 results."""
     keyword = role.replace(" ", "%20")
     url = (
         f"https://www.linkedin.com/jobs/search/"
@@ -158,6 +158,8 @@ def scrape_linkedin(role: str) -> list[dict]:
         "scrapeCompany": False,
     }
     items = run_apify_actor(ACTORS["linkedin"], run_input)
+    # Hard-cap to 5 in case the actor ignores the limit
+    items = items[:5]
     if items:
         log.info("    LinkedIn sample keys: %s", list(items[0].keys())[:10])
     jobs = []
@@ -166,7 +168,6 @@ def scrape_linkedin(role: str) -> list[dict]:
         company = item.get("companyName") or item.get("company") or ""
         if not title or not company:
             continue
-        # salaryInfo can be a list like ["$17.00", "$19.00"] or a string
         salary_raw = item.get("salaryInfo") or item.get("salary") or ""
         if isinstance(salary_raw, list):
             salary_raw = " - ".join(str(s) for s in salary_raw)
@@ -184,33 +185,48 @@ def scrape_linkedin(role: str) -> list[dict]:
     return jobs
 
 
-def scrape_naukri(role: str) -> list[dict]:
-    """Scrape Naukri jobs for a given role, filtering by keyword."""
-    run_input = {"desired_results": 5}
+def scrape_naukri_bulk(roles: list[str]) -> list[dict]:
+    """
+    Scrape Naukri jobs ONCE with a larger batch, then filter for all roles.
+    This avoids calling the actor 10 times (once per role).
+    """
+    run_input = {"desired_results": 50}
+    log.info("  Scraping Naukri (single bulk call for all roles) …")
     items = run_apify_actor(ACTORS["naukri"], run_input)
     if items:
         log.info("    Naukri sample keys: %s", list(items[0].keys()))
-    role_lower = role.lower()
+    log.info("    Naukri returned %d raw items", len(items))
+
+    roles_lower = {r.lower(): r for r in roles}
     jobs = []
     for item in items:
-        # Naukri actor uses capitalized keys with spaces: "Job Title", "Company", etc.
         title = item.get("Job Title") or item.get("title") or item.get("jobTitle") or ""
-        if role_lower not in title.lower():
-            continue
         company = item.get("Company") or item.get("company") or item.get("companyName") or ""
         if not title or not company:
             continue
+
+        # Match against any of the target roles
+        matched_role = None
+        title_lower = title.lower()
+        for role_lower, role_original in roles_lower.items():
+            if role_lower in title_lower:
+                matched_role = role_original
+                break
+        if not matched_role:
+            continue
+
         jobs.append({
             "title":       title,
             "company":     company,
             "location":    item.get("Location") or item.get("location") or "",
             "url":         item.get("Job URL") or item.get("url") or item.get("jdURL") or "",
             "platform":    "Naukri",
-            "role_type":   role,
+            "role_type":   matched_role,
             "salary":      item.get("Salary") or item.get("salary") or "",
             "description": (item.get("Description") or item.get("description") or "")[:2000],
             "posted_date": parse_date(item.get("Posted Time") or item.get("postedDate")),
         })
+    log.info("    Naukri matched %d jobs across all roles", len(jobs))
     return jobs
 
 
@@ -229,13 +245,11 @@ def scrape_indeed(role: str) -> list[dict]:
     jobs = []
     for item in items:
         title = item.get("title") or ""
-        # Indeed uses nested employer object
         employer = item.get("employer") or {}
         company  = employer.get("name") or item.get("company") or ""
         if not title or not company:
             continue
 
-        # Location can be a nested object or a string
         loc_raw = item.get("location") or {}
         if isinstance(loc_raw, dict):
             city    = loc_raw.get("city") or ""
@@ -244,7 +258,6 @@ def scrape_indeed(role: str) -> list[dict]:
         else:
             location_str = str(loc_raw)
 
-        # Salary from baseSalary object
         base_salary = item.get("baseSalary") or {}
         if isinstance(base_salary, dict) and base_salary.get("min"):
             sal_min  = base_salary.get("min", "")
@@ -255,7 +268,6 @@ def scrape_indeed(role: str) -> list[dict]:
         else:
             salary_str = item.get("salary") or ""
 
-        # Description can be a nested object or a string
         desc_raw = item.get("description") or {}
         if isinstance(desc_raw, dict):
             description = desc_raw.get("text") or desc_raw.get("html") or ""
@@ -275,6 +287,34 @@ def scrape_indeed(role: str) -> list[dict]:
         })
     return jobs
 
+
+# ---------------------------------------------------------------------------
+# Dedup helper
+# ---------------------------------------------------------------------------
+
+def deduplicate_and_collect(jobs: list[dict], all_jobs: list[dict],
+                            seen_urls: set, seen_keys: set):
+    """Apply Layer 1 + Layer 2 dedup and add unique jobs to all_jobs."""
+    added = 0
+    for job in jobs:
+        url = job.get("url", "")
+        if url and url in seen_urls:
+            continue
+        if url:
+            seen_urls.add(url)
+
+        dedup_key = make_dedup_key(job["title"], job["company"])
+        if dedup_key in seen_keys:
+            continue
+        seen_keys.add(dedup_key)
+
+        job["dedup_key"] = dedup_key
+        if not job.get("posted_date"):
+            job["posted_date"] = date.today().isoformat()
+
+        all_jobs.append(job)
+        added += 1
+    return added
 
 
 # ---------------------------------------------------------------------------
@@ -303,56 +343,49 @@ def main():
     log.info("=" * 60)
 
     all_jobs: list[dict] = []
-    seen_urls: set[str]  = set()      # Layer 1: within-platform dedup by URL
-    seen_keys: set[str]  = set()      # Layer 2: cross-platform dedup by title|company
+    seen_urls: set[str]  = set()
+    seen_keys: set[str]  = set()
 
-    scrapers = {
-        "LinkedIn": scrape_linkedin,
-        "Naukri":   scrape_naukri,
-        "Indeed":   scrape_indeed,
-    }
+    # ------------------------------------------------------------------
+    # 1. Naukri — single bulk call for all roles (saves 9 actor runs!)
+    # ------------------------------------------------------------------
+    try:
+        naukri_jobs = scrape_naukri_bulk(JOB_ROLES)
+        added = deduplicate_and_collect(naukri_jobs, all_jobs, seen_urls, seen_keys)
+        log.info("  Naukri: %d unique jobs added", added)
+    except Exception:
+        log.exception("  ✗ Failed scraping Naukri — skipping")
 
+    # ------------------------------------------------------------------
+    # 2. LinkedIn + Indeed — per role (20 actor runs total)
+    # ------------------------------------------------------------------
     for role in JOB_ROLES:
         log.info("--- Role: %s ---", role)
-        for platform_name, scraper_fn in scrapers.items():
-            try:
-                log.info("  Scraping %s …", platform_name)
-                jobs = scraper_fn(role)
-                log.info("  %s returned %d jobs for %s", platform_name, len(jobs), role)
 
-                for job in jobs:
-                    # Layer 1: deduplicate by URL within this run
-                    url = job.get("url", "")
-                    if url and url in seen_urls:
-                        continue
-                    if url:
-                        seen_urls.add(url)
+        # LinkedIn
+        try:
+            log.info("  Scraping LinkedIn …")
+            jobs = scrape_linkedin(role)
+            log.info("  LinkedIn returned %d jobs for %s", len(jobs), role)
+            added = deduplicate_and_collect(jobs, all_jobs, seen_urls, seen_keys)
+            log.info("  LinkedIn: %d unique added", added)
+        except Exception:
+            log.exception("  ✗ Failed scraping LinkedIn for role '%s' — skipping", role)
 
-                    # Layer 2: deduplicate by normalized title|company
-                    dedup_key = make_dedup_key(job["title"], job["company"])
-                    if dedup_key in seen_keys:
-                        continue
-                    seen_keys.add(dedup_key)
-
-                    job["dedup_key"] = dedup_key
-
-                    # Default posted_date to today if missing
-                    if not job.get("posted_date"):
-                        job["posted_date"] = date.today().isoformat()
-
-                    all_jobs.append(job)
-
-            except Exception:
-                log.exception(
-                    "  ✗ Failed scraping %s for role '%s' — skipping",
-                    platform_name, role,
-                )
+        # Indeed
+        try:
+            log.info("  Scraping Indeed …")
+            jobs = scrape_indeed(role)
+            log.info("  Indeed returned %d jobs for %s", len(jobs), role)
+            added = deduplicate_and_collect(jobs, all_jobs, seen_urls, seen_keys)
+            log.info("  Indeed: %d unique added", added)
+        except Exception:
+            log.exception("  ✗ Failed scraping Indeed for role '%s' — skipping", role)
 
     log.info("=" * 60)
     log.info("Total unique jobs after dedup: %d", len(all_jobs))
 
-    # Layer 3: upsert to Supabase via REST API (dedup_key is UNIQUE,
-    # so duplicates are handled automatically via merge-duplicates)
+    # Layer 3: upsert to Supabase via REST API
     if all_jobs:
         batch_size = 50
         for i in range(0, len(all_jobs), batch_size):
