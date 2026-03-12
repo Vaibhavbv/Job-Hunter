@@ -123,11 +123,11 @@ Daily at 8:00 AM IST
         ↓
 GitHub Actions triggers scraper.py
         ↓
-Scraper calls Apify API for 10 roles × 3 platforms
+1. Naukri: 1 bulk call (50 results), filters for all 10 roles
+2. LinkedIn: 3 key roles (Data Engineer, Data Analyst, Business Analyst)
+3. Indeed: all 10 roles × 5 results each
         ↓
 Deduplicates results (URL → title|company → DB upsert)
-        ↓
-~40–50 unique jobs saved to Supabase
         ↓
 Dashboard fetches & displays data from Supabase
 ```
@@ -146,11 +146,11 @@ You can trigger the scraper anytime from: **GitHub repo → Actions → Daily Jo
 
 | Service | Usage | Cost |
 |---------|-------|------|
-| Apify | 10 roles × 3 platforms × 5 results × 30 days | ~$1.50–$3.15 (within free $5 credits) |
+| Apify | 3 LinkedIn + 10 Indeed + 1 Naukri = 14 actor runs/day × 30 days | ~$2–$4 (within free $5 credits) |
 | Supabase | ~5 MB/month of job data | Free (500 MB limit) |
 | GitHub Actions | ~5 min/day runtime | Free |
 | Vercel | Static site hosting | Free |
-| **Total** | | **$0/month** ✅ |
+| **Total** | | **~$0/month** ✅ |
 
 ---
 
