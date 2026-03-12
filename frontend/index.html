@@ -1,0 +1,852 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Vaibhav's Job Dashboard — Fresh Jobs Daily</title>
+  <meta name="description" content="Personal job dashboard with daily-scraped listings from LinkedIn, Naukri, and Indeed for data & engineering roles." />
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+
+  <!-- Supabase JS CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+
+  <style>
+    /* ============================================================
+       CSS Custom Properties
+       ============================================================ */
+    :root {
+      --bg:             #f0f2f5;
+      --card-bg:        #ffffff;
+      --text-primary:   #1a1a2e;
+      --text-secondary: #555770;
+      --text-muted:     #8b8da3;
+      --border:         #e2e4ea;
+      --accent:         #4f46e5;
+      --accent-light:   #eef2ff;
+      --radius:         12px;
+      --shadow-sm:      0 1px 3px rgba(0,0,0,.06);
+      --shadow-md:      0 4px 12px rgba(0,0,0,.08);
+      --shadow-lg:      0 8px 30px rgba(0,0,0,.10);
+      --transition:     .2s ease;
+
+      /* Platform colors */
+      --linkedin:       #0a66c2;
+      --linkedin-bg:    #e8f1fb;
+      --naukri:         #16a34a;
+      --naukri-bg:      #e6f7ed;
+      --indeed:         #d97706;
+      --indeed-bg:      #fef3c7;
+
+      /* Role badge colors */
+      --role-data-eng:    #3b82f6;
+      --role-data-ana:    #8b5cf6;
+      --role-biz-ana:     #14b8a6;
+      --role-analytics:   #22c55e;
+      --role-etl:         #f59e0b;
+      --role-bi:          #ec4899;
+      --role-sql:         #06b6d4;
+      --role-python:      #6366f1;
+      --role-backend:     #e11d48;
+      --role-product:     #a855f7;
+    }
+
+    /* ============================================================
+       Reset & Base
+       ============================================================ */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg);
+      color: var(--text-primary);
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ============================================================
+       Header
+       ============================================================ */
+    .header {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(255,255,255,.85);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border);
+      padding: 16px 0;
+    }
+
+    .header-inner {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .header h1 {
+      font-size: 1.4rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      background: linear-gradient(135deg, var(--accent), #7c3aed);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .header .updated {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+
+    /* ============================================================
+       Container
+       ============================================================ */
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    /* ============================================================
+       Stats Row
+       ============================================================ */
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .stat-card {
+      background: var(--card-bg);
+      border-radius: var(--radius);
+      padding: 20px;
+      box-shadow: var(--shadow-sm);
+      text-align: center;
+      transition: transform var(--transition), box-shadow var(--transition);
+    }
+
+    .stat-card:hover {
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-md);
+    }
+
+    .stat-card .number {
+      font-size: 2rem;
+      font-weight: 800;
+      color: var(--accent);
+      line-height: 1;
+    }
+
+    .stat-card .label {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      margin-top: 6px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+
+    .stat-card.linkedin .number  { color: var(--linkedin); }
+    .stat-card.naukri   .number  { color: var(--naukri);   }
+    .stat-card.indeed   .number  { color: var(--indeed);   }
+
+    /* ============================================================
+       Filters & Search
+       ============================================================ */
+    .filters-section {
+      background: var(--card-bg);
+      border-radius: var(--radius);
+      padding: 20px;
+      box-shadow: var(--shadow-sm);
+      margin-bottom: 24px;
+    }
+
+    .search-bar {
+      width: 100%;
+      padding: 12px 16px 12px 44px;
+      border: 2px solid var(--border);
+      border-radius: 10px;
+      font-size: 0.95rem;
+      font-family: inherit;
+      outline: none;
+      transition: border-color var(--transition);
+      background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' fill='%238b8da3' viewBox='0 0 24 24'%3E%3Cpath d='M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5ZM9.5 14A4.5 4.5 0 1 1 14 9.5 4.49 4.49 0 0 1 9.5 14Z'/%3E%3C/svg%3E") no-repeat 14px center;
+    }
+
+    .search-bar:focus {
+      border-color: var(--accent);
+    }
+
+    .filter-groups {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 16px;
+    }
+
+    .filter-divider {
+      width: 1px;
+      background: var(--border);
+      margin: 0 4px;
+      align-self: stretch;
+    }
+
+    .filter-btn {
+      padding: 7px 16px;
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      background: transparent;
+      font-family: inherit;
+      font-size: 0.82rem;
+      font-weight: 500;
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: all var(--transition);
+      white-space: nowrap;
+    }
+
+    .filter-btn:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: var(--accent-light);
+    }
+
+    .filter-btn.active {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+
+    /* ============================================================
+       Date Group Headers
+       ============================================================ */
+    .date-group-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 32px 0 16px;
+    }
+
+    .date-group-header h2 {
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: var(--text-primary);
+      white-space: nowrap;
+    }
+
+    .date-group-header .count-badge {
+      background: var(--accent-light);
+      color: var(--accent);
+      font-size: 0.75rem;
+      font-weight: 700;
+      padding: 3px 10px;
+      border-radius: 20px;
+    }
+
+    .date-group-header::after {
+      content: "";
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
+    /* ============================================================
+       Job Cards Grid
+       ============================================================ */
+    .jobs-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+      gap: 16px;
+    }
+
+    .job-card {
+      background: var(--card-bg);
+      border-radius: var(--radius);
+      padding: 20px;
+      box-shadow: var(--shadow-sm);
+      transition: transform var(--transition), box-shadow var(--transition);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      position: relative;
+      border: 1px solid transparent;
+    }
+
+    .job-card:hover {
+      transform: translateY(-3px);
+      box-shadow: var(--shadow-lg);
+      border-color: var(--accent);
+    }
+
+    .job-card-top {
+      display: flex;
+      gap: 14px;
+      align-items: flex-start;
+    }
+
+    /* Company logo circle (initials) */
+    .logo-circle {
+      width: 48px;
+      height: 48px;
+      min-width: 48px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 1rem;
+      color: #fff;
+    }
+
+    .job-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .job-title {
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: var(--text-primary);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      line-height: 1.3;
+    }
+
+    .job-company {
+      font-size: 0.84rem;
+      color: var(--text-secondary);
+      margin-top: 2px;
+    }
+
+    .job-location {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      margin-top: 2px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .job-location::before {
+      content: "📍";
+      font-size: 0.72rem;
+    }
+
+    /* Tags */
+    .job-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .tag {
+      font-size: 0.72rem;
+      font-weight: 600;
+      padding: 3px 10px;
+      border-radius: 6px;
+      line-height: 1.4;
+    }
+
+    .tag-linkedin { background: var(--linkedin-bg); color: var(--linkedin); }
+    .tag-naukri   { background: var(--naukri-bg);   color: var(--naukri);   }
+    .tag-indeed   { background: var(--indeed-bg);   color: var(--indeed);   }
+
+    .tag-role {
+      background: #f0f0ff;
+      color: var(--accent);
+    }
+
+    .tag-date {
+      background: #f5f5f5;
+      color: var(--text-muted);
+    }
+
+    .tag-salary {
+      background: #ecfdf5;
+      color: #059669;
+    }
+
+    /* Apply button */
+    .apply-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      align-self: flex-start;
+      padding: 8px 18px;
+      background: linear-gradient(135deg, var(--accent), #7c3aed);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-family: inherit;
+      font-size: 0.82rem;
+      font-weight: 600;
+      text-decoration: none;
+      cursor: pointer;
+      transition: opacity var(--transition), transform var(--transition);
+    }
+
+    .apply-btn:hover {
+      opacity: .9;
+      transform: scale(1.03);
+    }
+
+    /* ============================================================
+       Loading Spinner
+       ============================================================ */
+    .loading {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 80px 20px;
+      gap: 16px;
+    }
+
+    .spinner {
+      width: 42px;
+      height: 42px;
+      border: 4px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .loading-text {
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    /* ============================================================
+       Empty State
+       ============================================================ */
+    .empty-state {
+      text-align: center;
+      padding: 80px 20px;
+      color: var(--text-muted);
+    }
+
+    .empty-state .emoji {
+      font-size: 3rem;
+      margin-bottom: 12px;
+    }
+
+    .empty-state h3 {
+      font-size: 1.1rem;
+      color: var(--text-secondary);
+      margin-bottom: 6px;
+    }
+
+    .empty-state p {
+      font-size: 0.88rem;
+    }
+
+    /* ============================================================
+       Responsive
+       ============================================================ */
+    @media (max-width: 640px) {
+      .header h1 { font-size: 1.15rem; }
+      .container  { padding: 16px; }
+      .stats-row  { grid-template-columns: repeat(2, 1fr); }
+      .jobs-grid  { grid-template-columns: 1fr; }
+      .filter-divider { display: none; }
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- ========== Header ========== -->
+  <header class="header">
+    <div class="header-inner">
+      <h1>🎯 Vaibhav's Job Dashboard</h1>
+      <span class="updated" id="lastUpdated">Loading…</span>
+    </div>
+  </header>
+
+  <div class="container">
+
+    <!-- ========== Stats ========== -->
+    <div class="stats-row">
+      <div class="stat-card" id="statTotal">
+        <div class="number" id="totalCount">–</div>
+        <div class="label">Total Jobs</div>
+      </div>
+      <div class="stat-card" id="statToday">
+        <div class="number" id="todayCount">–</div>
+        <div class="label">Added Today</div>
+      </div>
+      <div class="stat-card linkedin">
+        <div class="number" id="linkedinCount">–</div>
+        <div class="label">LinkedIn</div>
+      </div>
+      <div class="stat-card naukri">
+        <div class="number" id="naukriCount">–</div>
+        <div class="label">Naukri</div>
+      </div>
+      <div class="stat-card indeed">
+        <div class="number" id="indeedCount">–</div>
+        <div class="label">Indeed</div>
+      </div>
+    </div>
+
+    <!-- ========== Filters ========== -->
+    <div class="filters-section">
+      <input type="text" class="search-bar" id="searchInput" placeholder="Search by job title or company…" />
+
+      <div class="filter-groups">
+        <!-- Date filters -->
+        <button class="filter-btn active" data-filter="date" data-value="all">All</button>
+        <button class="filter-btn" data-filter="date" data-value="today">Today</button>
+        <button class="filter-btn" data-filter="date" data-value="7days">Last 7 days</button>
+
+        <div class="filter-divider"></div>
+
+        <!-- Platform filters -->
+        <button class="filter-btn" data-filter="platform" data-value="LinkedIn">LinkedIn</button>
+        <button class="filter-btn" data-filter="platform" data-value="Naukri">Naukri</button>
+        <button class="filter-btn" data-filter="platform" data-value="Indeed">Indeed</button>
+
+        <div class="filter-divider"></div>
+
+        <!-- Role filters -->
+        <button class="filter-btn" data-filter="role" data-value="Data Engineer">Data Engineer</button>
+        <button class="filter-btn" data-filter="role" data-value="Data Analyst">Data Analyst</button>
+        <button class="filter-btn" data-filter="role" data-value="Business Analyst">Business Analyst</button>
+        <button class="filter-btn" data-filter="role" data-value="Analytics Engineer">Analytics Engineer</button>
+        <button class="filter-btn" data-filter="role" data-value="ETL Developer">ETL Developer</button>
+        <button class="filter-btn" data-filter="role" data-value="BI Developer">BI Developer</button>
+        <button class="filter-btn" data-filter="role" data-value="SQL Developer">SQL Developer</button>
+        <button class="filter-btn" data-filter="role" data-value="Python Developer">Python Developer</button>
+        <button class="filter-btn" data-filter="role" data-value="Backend Engineer">Backend Engineer</button>
+        <button class="filter-btn" data-filter="role" data-value="Product Analyst">Product Analyst</button>
+      </div>
+    </div>
+
+    <!-- ========== Job List Area ========== -->
+    <div id="jobsArea">
+      <div class="loading" id="loadingSpinner">
+        <div class="spinner"></div>
+        <div class="loading-text">Fetching fresh jobs…</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================================================================== -->
+  <script>
+    // ==================================================================
+    // Supabase Config — replace with your project credentials
+    // ==================================================================
+    const SUPABASE_URL  = "YOUR_SUPABASE_URL";
+    const SUPABASE_KEY  = "YOUR_SUPABASE_ANON_KEY";
+
+    // ==================================================================
+    // State
+    // ==================================================================
+    let ALL_JOBS        = [];
+    let activeFilters   = { date: "all", platform: null, role: null };
+    let searchQuery     = "";
+
+    // ==================================================================
+    // Role Badge Colors
+    // ==================================================================
+    const ROLE_COLORS = {
+      "Data Engineer":      { bg: "#eff6ff", fg: "#3b82f6" },
+      "Data Analyst":       { bg: "#f5f3ff", fg: "#8b5cf6" },
+      "Business Analyst":   { bg: "#f0fdfa", fg: "#14b8a6" },
+      "Analytics Engineer": { bg: "#f0fdf4", fg: "#22c55e" },
+      "ETL Developer":      { bg: "#fffbeb", fg: "#f59e0b" },
+      "BI Developer":       { bg: "#fdf2f8", fg: "#ec4899" },
+      "SQL Developer":      { bg: "#ecfeff", fg: "#06b6d4" },
+      "Python Developer":   { bg: "#eef2ff", fg: "#6366f1" },
+      "Backend Engineer":   { bg: "#fff1f2", fg: "#e11d48" },
+      "Product Analyst":    { bg: "#faf5ff", fg: "#a855f7" },
+    };
+
+    // ==================================================================
+    // Helpers
+    // ==================================================================
+    function todayStr() {
+      return new Date().toISOString().slice(0, 10);
+    }
+
+    function daysAgo(n) {
+      const d = new Date();
+      d.setDate(d.getDate() - n);
+      return d.toISOString().slice(0, 10);
+    }
+
+    function hashColor(str) {
+      let hash = 0;
+      for (let i = 0; i < str.length; i++) {
+        hash = str.charCodeAt(i) + ((hash << 5) - hash);
+      }
+      const h = Math.abs(hash) % 360;
+      return `hsl(${h}, 55%, 50%)`;
+    }
+
+    function initials(name) {
+      return name
+        .split(/[\s&,]+/)
+        .filter(Boolean)
+        .slice(0, 2)
+        .map(w => w[0].toUpperCase())
+        .join("");
+    }
+
+    function formatDate(dateStr) {
+      if (!dateStr) return "—";
+      const d = new Date(dateStr + "T00:00:00");
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const diff = Math.round((today - d) / 86400000);
+      if (diff === 0) return "Today";
+      if (diff === 1) return "Yesterday";
+      if (diff < 7) return `${diff} days ago`;
+      return d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+    }
+
+    function friendlyGroupDate(dateStr) {
+      if (!dateStr) return "Unknown Date";
+      const d = new Date(dateStr + "T00:00:00");
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const diff = Math.round((today - d) / 86400000);
+      if (diff === 0) return "📅 Today";
+      if (diff === 1) return "📅 Yesterday";
+      return "📅 " + d.toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+    }
+
+    function truncate(str, len) {
+      if (!str) return "";
+      return str.length > len ? str.slice(0, len) + "…" : str;
+    }
+
+    function platformTagClass(p) {
+      return "tag-" + (p || "").toLowerCase();
+    }
+
+    // ==================================================================
+    // Render
+    // ==================================================================
+    function renderStats(jobs) {
+      const today = todayStr();
+      document.getElementById("totalCount").textContent    = jobs.length;
+      document.getElementById("todayCount").textContent    = jobs.filter(j => j.posted_date === today).length;
+      document.getElementById("linkedinCount").textContent = jobs.filter(j => j.platform === "LinkedIn").length;
+      document.getElementById("naukriCount").textContent   = jobs.filter(j => j.platform === "Naukri").length;
+      document.getElementById("indeedCount").textContent   = jobs.filter(j => j.platform === "Indeed").length;
+    }
+
+    function renderJobs(jobs) {
+      const area = document.getElementById("jobsArea");
+
+      if (jobs.length === 0) {
+        area.innerHTML = `
+          <div class="empty-state">
+            <div class="emoji">🔍</div>
+            <h3>No jobs found</h3>
+            <p>Try adjusting your filters or search query.</p>
+          </div>`;
+        return;
+      }
+
+      // Group by posted_date
+      const groups = {};
+      jobs.forEach(j => {
+        const key = j.posted_date || "unknown";
+        (groups[key] = groups[key] || []).push(j);
+      });
+
+      // Sort group keys descending
+      const sortedKeys = Object.keys(groups).sort((a, b) => (b > a ? 1 : -1));
+
+      let html = "";
+      for (const dateKey of sortedKeys) {
+        const groupJobs = groups[dateKey];
+
+        html += `
+          <div class="date-group-header">
+            <h2>${friendlyGroupDate(dateKey)}</h2>
+            <span class="count-badge">${groupJobs.length} job${groupJobs.length > 1 ? "s" : ""}</span>
+          </div>
+          <div class="jobs-grid">`;
+
+        for (const job of groupJobs) {
+          const color     = hashColor(job.company || "");
+          const letters   = initials(job.company  || "?");
+          const roleColor = ROLE_COLORS[job.role_type] || { bg: "#f0f0ff", fg: "#4f46e5" };
+
+          html += `
+            <div class="job-card">
+              <div class="job-card-top">
+                <div class="logo-circle" style="background:${color}">${letters}</div>
+                <div class="job-info">
+                  <div class="job-title" title="${(job.title || '').replace(/"/g, '&quot;')}">${truncate(job.title, 55)}</div>
+                  <div class="job-company">${truncate(job.company, 40)}</div>
+                  ${job.location ? `<div class="job-location">${truncate(job.location, 45)}</div>` : ""}
+                </div>
+              </div>
+              <div class="job-tags">
+                <span class="tag ${platformTagClass(job.platform)}">${job.platform || "—"}</span>
+                <span class="tag tag-role" style="background:${roleColor.bg};color:${roleColor.fg}">${job.role_type || "—"}</span>
+                <span class="tag tag-date">${formatDate(job.posted_date)}</span>
+                ${job.salary ? `<span class="tag tag-salary">💰 ${truncate(job.salary, 30)}</span>` : ""}
+              </div>
+              ${job.url ? `<a class="apply-btn" href="${job.url}" target="_blank" rel="noopener">Apply →</a>` : ""}
+            </div>`;
+        }
+
+        html += `</div>`;
+      }
+
+      area.innerHTML = html;
+    }
+
+    // ==================================================================
+    // Filtering
+    // ==================================================================
+    function applyFilters() {
+      let jobs = ALL_JOBS;
+
+      // Date filter
+      if (activeFilters.date === "today") {
+        const today = todayStr();
+        jobs = jobs.filter(j => j.posted_date === today);
+      } else if (activeFilters.date === "7days") {
+        const cutoff = daysAgo(7);
+        jobs = jobs.filter(j => j.posted_date >= cutoff);
+      }
+
+      // Platform filter
+      if (activeFilters.platform) {
+        jobs = jobs.filter(j => j.platform === activeFilters.platform);
+      }
+
+      // Role filter
+      if (activeFilters.role) {
+        jobs = jobs.filter(j => j.role_type === activeFilters.role);
+      }
+
+      // Search
+      if (searchQuery) {
+        const q = searchQuery.toLowerCase();
+        jobs = jobs.filter(j =>
+          (j.title   || "").toLowerCase().includes(q) ||
+          (j.company || "").toLowerCase().includes(q)
+        );
+      }
+
+      renderJobs(jobs);
+    }
+
+    // ==================================================================
+    // Event Listeners
+    // ==================================================================
+    document.querySelectorAll(".filter-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const filterType = btn.dataset.filter;
+        const value      = btn.dataset.value;
+
+        if (filterType === "date") {
+          // Date buttons are exclusive
+          document.querySelectorAll('[data-filter="date"]').forEach(b => b.classList.remove("active"));
+          btn.classList.add("active");
+          activeFilters.date = value;
+        } else if (filterType === "platform") {
+          // Toggle platform filter
+          const isActive = btn.classList.contains("active");
+          document.querySelectorAll('[data-filter="platform"]').forEach(b => b.classList.remove("active"));
+          if (!isActive) {
+            btn.classList.add("active");
+            activeFilters.platform = value;
+          } else {
+            activeFilters.platform = null;
+          }
+        } else if (filterType === "role") {
+          // Toggle role filter
+          const isActive = btn.classList.contains("active");
+          document.querySelectorAll('[data-filter="role"]').forEach(b => b.classList.remove("active"));
+          if (!isActive) {
+            btn.classList.add("active");
+            activeFilters.role = value;
+          } else {
+            activeFilters.role = null;
+          }
+        }
+
+        applyFilters();
+      });
+    });
+
+    document.getElementById("searchInput").addEventListener("input", (e) => {
+      searchQuery = e.target.value.trim();
+      applyFilters();
+    });
+
+    // ==================================================================
+    // Fetch Data
+    // ==================================================================
+    async function fetchJobs() {
+      try {
+        const sb   = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        const { data, error } = await sb
+          .from("jobs")
+          .select("*")
+          .order("posted_date", { ascending: false })
+          .order("created_at", { ascending: false });
+
+        if (error) throw error;
+
+        ALL_JOBS = data || [];
+
+        // Determine "last updated" from newest created_at
+        if (ALL_JOBS.length > 0) {
+          const newest = ALL_JOBS.reduce((a, b) =>
+            (a.created_at || "") > (b.created_at || "") ? a : b
+          );
+          const d = new Date(newest.created_at);
+          document.getElementById("lastUpdated").textContent =
+            "Last updated: " + d.toLocaleString("en-IN", {
+              day: "numeric", month: "short", year: "numeric",
+              hour: "2-digit", minute: "2-digit"
+            });
+        } else {
+          document.getElementById("lastUpdated").textContent = "No jobs yet";
+        }
+
+        renderStats(ALL_JOBS);
+        renderJobs(ALL_JOBS);
+
+      } catch (err) {
+        console.error("Failed to fetch jobs:", err);
+        document.getElementById("jobsArea").innerHTML = `
+          <div class="empty-state">
+            <div class="emoji">⚠️</div>
+            <h3>Could not load jobs</h3>
+            <p>Check your Supabase credentials and try again.</p>
+          </div>`;
+        document.getElementById("lastUpdated").textContent = "Error loading data";
+      }
+    }
+
+    // ==================================================================
+    // Init
+    // ==================================================================
+    fetchJobs();
+  </script>
+</body>
+</html>
