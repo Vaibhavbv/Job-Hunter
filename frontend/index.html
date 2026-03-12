@@ -1,10 +1,12 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Vaibhav's Job Dashboard — Fresh Jobs Daily</title>
-  <meta name="description" content="Personal job dashboard with daily-scraped listings from LinkedIn, Naukri, and Indeed for data & engineering roles." />
+  <meta name="description"
+    content="Personal job dashboard with daily-scraped listings from LinkedIn, Naukri, and Indeed for data & engineering roles." />
 
   <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -19,45 +21,51 @@
        CSS Custom Properties
        ============================================================ */
     :root {
-      --bg:             #f0f2f5;
-      --card-bg:        #ffffff;
-      --text-primary:   #1a1a2e;
+      --bg: #f0f2f5;
+      --card-bg: #ffffff;
+      --text-primary: #1a1a2e;
       --text-secondary: #555770;
-      --text-muted:     #8b8da3;
-      --border:         #e2e4ea;
-      --accent:         #4f46e5;
-      --accent-light:   #eef2ff;
-      --radius:         12px;
-      --shadow-sm:      0 1px 3px rgba(0,0,0,.06);
-      --shadow-md:      0 4px 12px rgba(0,0,0,.08);
-      --shadow-lg:      0 8px 30px rgba(0,0,0,.10);
-      --transition:     .2s ease;
+      --text-muted: #8b8da3;
+      --border: #e2e4ea;
+      --accent: #4f46e5;
+      --accent-light: #eef2ff;
+      --radius: 12px;
+      --shadow-sm: 0 1px 3px rgba(0, 0, 0, .06);
+      --shadow-md: 0 4px 12px rgba(0, 0, 0, .08);
+      --shadow-lg: 0 8px 30px rgba(0, 0, 0, .10);
+      --transition: .2s ease;
 
       /* Platform colors */
-      --linkedin:       #0a66c2;
-      --linkedin-bg:    #e8f1fb;
-      --naukri:         #16a34a;
-      --naukri-bg:      #e6f7ed;
-      --indeed:         #d97706;
-      --indeed-bg:      #fef3c7;
+      --linkedin: #0a66c2;
+      --linkedin-bg: #e8f1fb;
+      --naukri: #16a34a;
+      --naukri-bg: #e6f7ed;
+      --indeed: #d97706;
+      --indeed-bg: #fef3c7;
 
       /* Role badge colors */
-      --role-data-eng:    #3b82f6;
-      --role-data-ana:    #8b5cf6;
-      --role-biz-ana:     #14b8a6;
-      --role-analytics:   #22c55e;
-      --role-etl:         #f59e0b;
-      --role-bi:          #ec4899;
-      --role-sql:         #06b6d4;
-      --role-python:      #6366f1;
-      --role-backend:     #e11d48;
-      --role-product:     #a855f7;
+      --role-data-eng: #3b82f6;
+      --role-data-ana: #8b5cf6;
+      --role-biz-ana: #14b8a6;
+      --role-analytics: #22c55e;
+      --role-etl: #f59e0b;
+      --role-bi: #ec4899;
+      --role-sql: #06b6d4;
+      --role-python: #6366f1;
+      --role-backend: #e11d48;
+      --role-product: #a855f7;
     }
 
     /* ============================================================
        Reset & Base
        ============================================================ */
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
 
     body {
       font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
@@ -74,7 +82,7 @@
       position: sticky;
       top: 0;
       z-index: 100;
-      background: rgba(255,255,255,.85);
+      background: rgba(255, 255, 255, .85);
       backdrop-filter: blur(16px);
       -webkit-backdrop-filter: blur(16px);
       border-bottom: 1px solid var(--border);
@@ -156,9 +164,17 @@
       letter-spacing: .04em;
     }
 
-    .stat-card.linkedin .number  { color: var(--linkedin); }
-    .stat-card.naukri   .number  { color: var(--naukri);   }
-    .stat-card.indeed   .number  { color: var(--indeed);   }
+    .stat-card.linkedin .number {
+      color: var(--linkedin);
+    }
+
+    .stat-card.naukri .number {
+      color: var(--naukri);
+    }
+
+    .stat-card.indeed .number {
+      color: var(--indeed);
+    }
 
     /* ============================================================
        Filters & Search
@@ -358,9 +374,20 @@
       line-height: 1.4;
     }
 
-    .tag-linkedin { background: var(--linkedin-bg); color: var(--linkedin); }
-    .tag-naukri   { background: var(--naukri-bg);   color: var(--naukri);   }
-    .tag-indeed   { background: var(--indeed-bg);   color: var(--indeed);   }
+    .tag-linkedin {
+      background: var(--linkedin-bg);
+      color: var(--linkedin);
+    }
+
+    .tag-naukri {
+      background: var(--naukri-bg);
+      color: var(--naukri);
+    }
+
+    .tag-indeed {
+      background: var(--indeed-bg);
+      color: var(--indeed);
+    }
 
     .tag-role {
       background: #f0f0ff;
@@ -422,7 +449,11 @@
       animation: spin 0.8s linear infinite;
     }
 
-    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
 
     .loading-text {
       font-size: 0.9rem;
@@ -458,11 +489,25 @@
        Responsive
        ============================================================ */
     @media (max-width: 640px) {
-      .header h1 { font-size: 1.15rem; }
-      .container  { padding: 16px; }
-      .stats-row  { grid-template-columns: repeat(2, 1fr); }
-      .jobs-grid  { grid-template-columns: 1fr; }
-      .filter-divider { display: none; }
+      .header h1 {
+        font-size: 1.15rem;
+      }
+
+      .container {
+        padding: 16px;
+      }
+
+      .stats-row {
+        grid-template-columns: repeat(2, 1fr);
+      }
+
+      .jobs-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .filter-divider {
+        display: none;
+      }
     }
   </style>
 </head>
@@ -550,30 +595,30 @@
     // ==================================================================
     // Supabase Config — replace with your project credentials
     // ==================================================================
-    const SUPABASE_URL  = "YOUR_SUPABASE_URL";
-    const SUPABASE_KEY  = "YOUR_SUPABASE_ANON_KEY";
+    const SUPABASE_URL = "https://qlvnnrmilwfxzlotduld.supabase.co";
+    const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFsdm5ucm1pbHdmeHpsb3RkdWxkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzMzYwMTcsImV4cCI6MjA4ODkxMjAxN30.sDfvpxlCgPjGAHBlQpolVEB-wxQ8lbpMPdNsYqugumQ";
 
     // ==================================================================
     // State
     // ==================================================================
-    let ALL_JOBS        = [];
-    let activeFilters   = { date: "all", platform: null, role: null };
-    let searchQuery     = "";
+    let ALL_JOBS = [];
+    let activeFilters = { date: "all", platform: null, role: null };
+    let searchQuery = "";
 
     // ==================================================================
     // Role Badge Colors
     // ==================================================================
     const ROLE_COLORS = {
-      "Data Engineer":      { bg: "#eff6ff", fg: "#3b82f6" },
-      "Data Analyst":       { bg: "#f5f3ff", fg: "#8b5cf6" },
-      "Business Analyst":   { bg: "#f0fdfa", fg: "#14b8a6" },
+      "Data Engineer": { bg: "#eff6ff", fg: "#3b82f6" },
+      "Data Analyst": { bg: "#f5f3ff", fg: "#8b5cf6" },
+      "Business Analyst": { bg: "#f0fdfa", fg: "#14b8a6" },
       "Analytics Engineer": { bg: "#f0fdf4", fg: "#22c55e" },
-      "ETL Developer":      { bg: "#fffbeb", fg: "#f59e0b" },
-      "BI Developer":       { bg: "#fdf2f8", fg: "#ec4899" },
-      "SQL Developer":      { bg: "#ecfeff", fg: "#06b6d4" },
-      "Python Developer":   { bg: "#eef2ff", fg: "#6366f1" },
-      "Backend Engineer":   { bg: "#fff1f2", fg: "#e11d48" },
-      "Product Analyst":    { bg: "#faf5ff", fg: "#a855f7" },
+      "ETL Developer": { bg: "#fffbeb", fg: "#f59e0b" },
+      "BI Developer": { bg: "#fdf2f8", fg: "#ec4899" },
+      "SQL Developer": { bg: "#ecfeff", fg: "#06b6d4" },
+      "Python Developer": { bg: "#eef2ff", fg: "#6366f1" },
+      "Backend Engineer": { bg: "#fff1f2", fg: "#e11d48" },
+      "Product Analyst": { bg: "#faf5ff", fg: "#a855f7" },
     };
 
     // ==================================================================
@@ -644,11 +689,11 @@
     // ==================================================================
     function renderStats(jobs) {
       const today = todayStr();
-      document.getElementById("totalCount").textContent    = jobs.length;
-      document.getElementById("todayCount").textContent    = jobs.filter(j => j.posted_date === today).length;
+      document.getElementById("totalCount").textContent = jobs.length;
+      document.getElementById("todayCount").textContent = jobs.filter(j => j.posted_date === today).length;
       document.getElementById("linkedinCount").textContent = jobs.filter(j => j.platform === "LinkedIn").length;
-      document.getElementById("naukriCount").textContent   = jobs.filter(j => j.platform === "Naukri").length;
-      document.getElementById("indeedCount").textContent   = jobs.filter(j => j.platform === "Indeed").length;
+      document.getElementById("naukriCount").textContent = jobs.filter(j => j.platform === "Naukri").length;
+      document.getElementById("indeedCount").textContent = jobs.filter(j => j.platform === "Indeed").length;
     }
 
     function renderJobs(jobs) {
@@ -686,8 +731,8 @@
           <div class="jobs-grid">`;
 
         for (const job of groupJobs) {
-          const color     = hashColor(job.company || "");
-          const letters   = initials(job.company  || "?");
+          const color = hashColor(job.company || "");
+          const letters = initials(job.company || "?");
           const roleColor = ROLE_COLORS[job.role_type] || { bg: "#f0f0ff", fg: "#4f46e5" };
 
           html += `
@@ -745,7 +790,7 @@
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
         jobs = jobs.filter(j =>
-          (j.title   || "").toLowerCase().includes(q) ||
+          (j.title || "").toLowerCase().includes(q) ||
           (j.company || "").toLowerCase().includes(q)
         );
       }
@@ -759,7 +804,7 @@
     document.querySelectorAll(".filter-btn").forEach(btn => {
       btn.addEventListener("click", () => {
         const filterType = btn.dataset.filter;
-        const value      = btn.dataset.value;
+        const value = btn.dataset.value;
 
         if (filterType === "date") {
           // Date buttons are exclusive
@@ -802,7 +847,7 @@
     // ==================================================================
     async function fetchJobs() {
       try {
-        const sb   = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
         const { data, error } = await sb
           .from("jobs")
           .select("*")
@@ -849,4 +894,5 @@
     fetchJobs();
   </script>
 </body>
+
 </html>
