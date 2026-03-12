@@ -154,26 +154,32 @@ def scrape_linkedin(role: str) -> list[dict]:
     )
     run_input = {
         "urls": [url],
-        "count": 5,
+        "rows": 5,
         "scrapeCompany": False,
     }
     items = run_apify_actor(ACTORS["linkedin"], run_input)
+    if items:
+        log.info("    LinkedIn sample keys: %s", list(items[0].keys())[:10])
     jobs = []
     for item in items:
-        title   = item.get("title") or item.get("jobTitle") or ""
-        company = item.get("company") or item.get("companyName") or ""
+        title   = item.get("title") or ""
+        company = item.get("companyName") or item.get("company") or ""
         if not title or not company:
             continue
+        # salaryInfo can be a list like ["$17.00", "$19.00"] or a string
+        salary_raw = item.get("salaryInfo") or item.get("salary") or ""
+        if isinstance(salary_raw, list):
+            salary_raw = " - ".join(str(s) for s in salary_raw)
         jobs.append({
             "title":       title,
             "company":     company,
-            "location":    item.get("location") or item.get("place") or "",
-            "url":         item.get("url") or item.get("link") or item.get("jobUrl") or "",
+            "location":    item.get("location") or "",
+            "url":         item.get("link") or item.get("url") or "",
             "platform":    "LinkedIn",
             "role_type":   role,
-            "salary":      item.get("salary") or "",
-            "description": (item.get("description") or "")[:2000],
-            "posted_date": parse_date(item.get("postedDate") or item.get("publishedAt") or item.get("postedTime")),
+            "salary":      str(salary_raw),
+            "description": (item.get("descriptionText") or item.get("description") or "")[:2000],
+            "posted_date": parse_date(item.get("postedAt") or item.get("publishedAt")),
         })
     return jobs
 
@@ -182,32 +188,28 @@ def scrape_naukri(role: str) -> list[dict]:
     """Scrape Naukri jobs for a given role, filtering by keyword."""
     run_input = {"desired_results": 5}
     items = run_apify_actor(ACTORS["naukri"], run_input)
+    if items:
+        log.info("    Naukri sample keys: %s", list(items[0].keys()))
     role_lower = role.lower()
     jobs = []
     for item in items:
-        title = item.get("title") or item.get("jobTitle") or ""
+        # Naukri actor uses capitalized keys with spaces: "Job Title", "Company", etc.
+        title = item.get("Job Title") or item.get("title") or item.get("jobTitle") or ""
         if role_lower not in title.lower():
             continue
-        company = item.get("company") or item.get("companyName") or ""
+        company = item.get("Company") or item.get("company") or item.get("companyName") or ""
         if not title or not company:
             continue
-        # Resolve location safely — placeholders may be a list or absent
-        placeholders = item.get("placeholders")
-        if isinstance(placeholders, list) and len(placeholders) > 0:
-            loc = item.get("location") or placeholders[0].get("value", "")
-        else:
-            loc = item.get("location", "")
-
         jobs.append({
             "title":       title,
             "company":     company,
-            "location":    loc,
-            "url":         item.get("url") or item.get("jdURL") or "",
+            "location":    item.get("Location") or item.get("location") or "",
+            "url":         item.get("Job URL") or item.get("url") or item.get("jdURL") or "",
             "platform":    "Naukri",
             "role_type":   role,
-            "salary":      item.get("salary") or item.get("salaryText") or "",
-            "description": (item.get("description") or item.get("jobDescription") or "")[:2000],
-            "posted_date": parse_date(item.get("postedDate") or item.get("footerPlaceholderLabel") or item.get("createdDate")),
+            "salary":      item.get("Salary") or item.get("salary") or "",
+            "description": (item.get("Description") or item.get("description") or "")[:2000],
+            "posted_date": parse_date(item.get("Posted Time") or item.get("postedDate")),
         })
     return jobs
 
@@ -222,24 +224,57 @@ def scrape_indeed(role: str) -> list[dict]:
         "datePosted": "1",
     }
     items = run_apify_actor(ACTORS["indeed"], run_input)
+    if items:
+        log.info("    Indeed sample keys: %s", list(items[0].keys())[:10])
     jobs = []
     for item in items:
-        title   = item.get("title") or item.get("positionName") or ""
-        company = item.get("company") or item.get("companyName") or ""
+        title = item.get("title") or ""
+        # Indeed uses nested employer object
+        employer = item.get("employer") or {}
+        company  = employer.get("name") or item.get("company") or ""
         if not title or not company:
             continue
+
+        # Location can be a nested object or a string
+        loc_raw = item.get("location") or {}
+        if isinstance(loc_raw, dict):
+            city    = loc_raw.get("city") or ""
+            country = loc_raw.get("countryName") or ""
+            location_str = f"{city}, {country}".strip(", ") if city or country else ""
+        else:
+            location_str = str(loc_raw)
+
+        # Salary from baseSalary object
+        base_salary = item.get("baseSalary") or {}
+        if isinstance(base_salary, dict) and base_salary.get("min"):
+            sal_min  = base_salary.get("min", "")
+            sal_max  = base_salary.get("max", "")
+            sal_unit = base_salary.get("unitOfWork", "")
+            sal_curr = base_salary.get("currencyCode", "")
+            salary_str = f"{sal_curr} {sal_min}-{sal_max}/{sal_unit}".strip()
+        else:
+            salary_str = item.get("salary") or ""
+
+        # Description can be a nested object or a string
+        desc_raw = item.get("description") or {}
+        if isinstance(desc_raw, dict):
+            description = desc_raw.get("text") or desc_raw.get("html") or ""
+        else:
+            description = str(desc_raw)
+
         jobs.append({
             "title":       title,
             "company":     company,
-            "location":    item.get("location") or "",
-            "url":         item.get("url") or item.get("externalApplyLink") or "",
+            "location":    location_str,
+            "url":         item.get("url") or item.get("jobUrl") or "",
             "platform":    "Indeed",
             "role_type":   role,
-            "salary":      item.get("salary") or "",
-            "description": (item.get("description") or "")[:2000],
-            "posted_date": parse_date(item.get("postedDate") or item.get("postedAt") or item.get("date")),
+            "salary":      salary_str,
+            "description": description[:2000],
+            "posted_date": parse_date(item.get("datePublished") or item.get("dateOnIndeed")),
         })
     return jobs
+
 
 
 # ---------------------------------------------------------------------------
