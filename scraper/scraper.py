@@ -38,13 +38,24 @@ JOB_ROLES = [
     "Product Analyst",
 ]
 
-# LinkedIn actor ignores result-count limits and scrapes ALL matches
-# (~100-500 per role). To control cost, only use the 3 highest-priority
-# roles for LinkedIn. Indeed + Naukri cover the rest cheaply.
+# LinkedIn actor (curious_coder) is pay-per-result ($1/1000) and ignores
+# the 'rows' input parameter — it scrapes ALL matches (300-400 per role!).
+# To control cost we:
+#   1. Use only 1 high-priority role for LinkedIn
+#   2. Pass maxItems=10 to cap billing at Apify API level
+#   3. Hard-cap items locally to 5 as a safety net
 LINKEDIN_ROLES = [
+    "Data Engineer",
+]
+
+# Indeed is cheap (pay-per-result, respects limits), but we still limit
+# to 5 key roles to keep total cost low.
+INDEED_ROLES = [
     "Data Engineer",
     "Data Analyst",
     "Business Analyst",
+    "Python Developer",
+    "Backend Engineer",
 ]
 
 # Apify actor IDs
@@ -85,13 +96,23 @@ def make_dedup_key(title: str, company: str) -> str:
     return f"{normalize(title)}|{normalize(company)}"
 
 
-def run_apify_actor(actor_id: str, run_input: dict) -> list:
+def run_apify_actor(actor_id: str, run_input: dict, max_items: int | None = None) -> list:
     """
     Start an Apify actor, poll until finished, return dataset items.
     Returns an empty list on any failure.
+
+    Args:
+        actor_id:  Apify actor identifier (e.g. 'user~actor-name').
+        run_input: JSON body sent to the actor as input.
+        max_items: If set, appended as ?maxItems= on the run URL.
+                   For pay-per-result actors this caps the BILLING —
+                   you won't be charged for more than this many items.
     """
-    # 1. Start the actor run
+    # 1. Start the actor run (with optional billing cap)
     start_url = f"{APIFY_BASE}/acts/{actor_id}/runs?token={APIFY_TOKEN}"
+    if max_items is not None:
+        start_url += f"&maxItems={max_items}"
+        log.info("  Billing cap: maxItems=%d", max_items)
     resp = requests.post(start_url, json=run_input, timeout=30)
     resp.raise_for_status()
     run_data = resp.json()["data"]
@@ -116,9 +137,12 @@ def run_apify_actor(actor_id: str, run_input: dict) -> list:
         log.warning("  Actor %s run %s timed out after %ds", actor_id, run_id, MAX_WAIT)
         return []
 
-    # 3. Fetch dataset items
+    # 3. Fetch dataset items (also limit the fetch as a safety net)
     dataset_id = status_resp.json()["data"]["defaultDatasetId"]
+    fetch_limit = max_items if max_items else ""
     items_url  = f"{APIFY_BASE}/datasets/{dataset_id}/items?token={APIFY_TOKEN}&format=json"
+    if fetch_limit:
+        items_url += f"&limit={fetch_limit}"
     items_resp = requests.get(items_url, timeout=30)
     items_resp.raise_for_status()
     items = items_resp.json()
@@ -155,7 +179,12 @@ def parse_date(value) -> str | None:
 # ---------------------------------------------------------------------------
 
 def scrape_linkedin(role: str) -> list[dict]:
-    """Scrape LinkedIn jobs for a given role. Limited to 5 results."""
+    """
+    Scrape LinkedIn jobs for a given role.
+
+    Uses maxItems=10 at Apify API level to cap billing (pay-per-result),
+    then hard-caps to 5 results locally as a safety net.
+    """
     keyword = role.replace(" ", "%20")
     url = (
         f"https://www.linkedin.com/jobs/search/"
@@ -163,11 +192,13 @@ def scrape_linkedin(role: str) -> list[dict]:
     )
     run_input = {
         "urls": [url],
-        "rows": 5,
+        "rows": 10,
         "scrapeCompany": False,
     }
-    items = run_apify_actor(ACTORS["linkedin"], run_input)
-    # Hard-cap to 5 in case the actor ignores the limit
+    # maxItems=10 caps Apify billing — even if the actor scrapes 400 jobs,
+    # we only pay for 10. This is the critical cost-control mechanism.
+    items = run_apify_actor(ACTORS["linkedin"], run_input, max_items=10)
+    # Hard-cap to 5 locally as a second safety net
     items = items[:5]
     if items:
         log.info("    LinkedIn sample keys: %s", list(items[0].keys())[:10])
@@ -366,25 +397,21 @@ def main():
         log.exception("  ✗ Failed scraping Naukri — skipping")
 
     # ------------------------------------------------------------------
-    # 2. LinkedIn (3 key roles) + Indeed (all 10 roles)
+    # 2. LinkedIn (1 key role, maxItems capped) + Indeed (5 key roles)
     # ------------------------------------------------------------------
-    for role in JOB_ROLES:
-        log.info("--- Role: %s ---", role)
+    for role in LINKEDIN_ROLES:
+        log.info("--- LinkedIn: %s ---", role)
+        try:
+            log.info("  Scraping LinkedIn (maxItems=10, local cap=5) …")
+            jobs = scrape_linkedin(role)
+            log.info("  LinkedIn returned %d jobs for %s", len(jobs), role)
+            added = deduplicate_and_collect(jobs, all_jobs, seen_urls, seen_keys)
+            log.info("  LinkedIn: %d unique added", added)
+        except Exception:
+            log.exception("  ✗ Failed scraping LinkedIn for role '%s' — skipping", role)
 
-        # LinkedIn — only for high-priority roles (actor is expensive)
-        if role in LINKEDIN_ROLES:
-            try:
-                log.info("  Scraping LinkedIn …")
-                jobs = scrape_linkedin(role)
-                log.info("  LinkedIn returned %d jobs for %s", len(jobs), role)
-                added = deduplicate_and_collect(jobs, all_jobs, seen_urls, seen_keys)
-                log.info("  LinkedIn: %d unique added", added)
-            except Exception:
-                log.exception("  ✗ Failed scraping LinkedIn for role '%s' — skipping", role)
-        else:
-            log.info("  Skipping LinkedIn for '%s' (cost control)", role)
-
-        # Indeed — all roles (cheap, pay-per-result, respects limits)
+    for role in INDEED_ROLES:
+        log.info("--- Indeed: %s ---", role)
         try:
             log.info("  Scraping Indeed …")
             jobs = scrape_indeed(role)

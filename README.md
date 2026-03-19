@@ -10,6 +10,8 @@ A fully automated personal job dashboard that scrapes **40–50 fresh jobs daily
 | Frontend | Vanilla HTML/CSS/JS | Free |
 | Hosting | Vercel | Free tier |
 
+> ⚠️ **Cost Note:** The LinkedIn Apify actor (`curious_coder~linkedin-jobs-scraper`) is pay-per-result and ignores result-count limits — it scrapes ALL matches. We use Apify's `maxItems` API parameter to cap billing at 10 results per run.
+
 ---
 
 ## 📁 Project Structure
@@ -124,8 +126,8 @@ Daily at 8:00 AM IST
 GitHub Actions triggers scraper.py
         ↓
 1. Naukri: 1 bulk call (50 results), filters for all 10 roles
-2. LinkedIn: 3 key roles (Data Engineer, Data Analyst, Business Analyst)
-3. Indeed: all 10 roles × 5 results each
+2. LinkedIn: 1 key role (Data Engineer), billing capped at 10 results via maxItems
+3. Indeed: 5 key roles × 5 results each
         ↓
 Deduplicates results (URL → title|company → DB upsert)
         ↓
@@ -146,7 +148,7 @@ You can trigger the scraper anytime from: **GitHub repo → Actions → Daily Jo
 
 | Service | Usage | Cost |
 |---------|-------|------|
-| Apify | 3 LinkedIn + 10 Indeed + 1 Naukri = 14 actor runs/day × 30 days | ~$2–$4 (within free $5 credits) |
+| Apify | 1 LinkedIn (maxItems=10) + 5 Indeed + 1 Naukri = 7 actor runs/day × 30 days | ~$1.50–$2.50 (within free $5 credits) |
 | Supabase | ~5 MB/month of job data | Free (500 MB limit) |
 | GitHub Actions | ~5 min/day runtime | Free |
 | Vercel | Static site hosting | Free |
@@ -176,16 +178,14 @@ Edit `.github/workflows/daily.yml` — change the cron expression. Use [crontab.
 
 ## 📋 Job Roles Tracked
 
-1. Data Engineer
-2. Data Analyst
-3. Business Analyst
-4. Analytics Engineer
-5. ETL Developer
-6. BI Developer
-7. SQL Developer
-8. Python Developer
-9. Backend Engineer
-10. Product Analyst
+**Naukri** (all 10 roles via bulk call):
+Data Engineer, Data Analyst, Business Analyst, Analytics Engineer, ETL Developer, BI Developer, SQL Developer, Python Developer, Backend Engineer, Product Analyst
+
+**LinkedIn** (1 role, billing capped):
+Data Engineer
+
+**Indeed** (5 roles):
+Data Engineer, Data Analyst, Business Analyst, Python Developer, Backend Engineer
 
 ---
 
