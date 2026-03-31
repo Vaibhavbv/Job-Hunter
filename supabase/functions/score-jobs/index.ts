@@ -28,7 +28,7 @@ interface ScoreResult {
 async function scoreJobBatch(
   resumeText: string,
   jobs: AiJob[],
-  anthropicKey: string
+  geminiKey: string
 ): Promise<Map<number, ScoreResult>> {
   const jobDescriptions = jobs
     .map(
@@ -55,28 +55,28 @@ For EACH job, return a JSON array of objects (one per job, same order) with thes
 
 Return ONLY the JSON array, nothing else.`;
 
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
+  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "x-api-key": anthropicKey,
-      "anthropic-version": "2023-06-01",
     },
     body: JSON.stringify({
-      model: "claude-3-5-sonnet-latest",
-      max_tokens: 2048,
-      messages: [{ role: "user", content: prompt }],
+      contents: [
+        {
+          parts: [{ text: prompt }],
+        },
+      ],
     }),
   });
 
   if (!response.ok) {
     const errText = await response.text();
-    console.error("Claude scoring error:", response.status, errText);
-    throw new Error(`Claude API returned ${response.status}`);
+    console.error("Gemini scoring error:", response.status, errText);
+    throw new Error(`Gemini API returned ${response.status}`);
   }
 
   const data = await response.json();
-  const rawText = data.content?.[0]?.text || "[]";
+  const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || "[]";
 
   const results = new Map<number, ScoreResult>();
 
@@ -122,7 +122,7 @@ serve(async (req: Request) => {
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY")!;
+    const geminiKey = Deno.env.get("GEMINI_API_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     // Fetch session resume text
@@ -171,7 +171,7 @@ serve(async (req: Request) => {
       console.log(`Scoring batch ${i / BATCH_SIZE + 1}: ${batch.length} jobs`);
 
       try {
-        const scores = await scoreJobBatch(session.resume_text, batch, anthropicKey);
+        const scores = await scoreJobBatch(session.resume_text, batch, geminiKey);
 
         // Update each job with its score
         for (const job of batch) {

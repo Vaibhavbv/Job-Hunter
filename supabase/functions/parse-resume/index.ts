@@ -23,41 +23,43 @@ serve(async (req: Request) => {
       );
     }
 
-    // Call Claude API to extract job titles
-    const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
-    if (!anthropicKey) {
-      throw new Error("ANTHROPIC_API_KEY not configured");
+    // Call Gemini API to extract job titles
+    const geminiKey = Deno.env.get("GEMINI_API_KEY");
+    if (!geminiKey) {
+      throw new Error("GEMINI_API_KEY not configured");
     }
 
-    const claudeResponse = await fetch("https://api.anthropic.com/v1/messages", {
+    const geminiResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-api-key": anthropicKey,
-        "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({
-        model: "claude-3-5-sonnet-latest",
-        max_tokens: 256,
-        messages: [
+        contents: [
           {
-            role: "user",
-            content: `Here is a resume:\n\n${resume_text.slice(0, 8000)}\n\nExtract job titles this person is best suited for. Return exactly 5 job titles as a JSON array, ordered by relevance. Only return the JSON array, nothing else.`,
+            parts: [
+              {
+                text: `Here is a resume:\n\n${resume_text.slice(0, 8000)}\n\nExtract job titles this person is best suited for. Return exactly 5 job titles as a JSON array, ordered by relevance. Only return the JSON array, nothing else.`,
+              },
+            ],
           },
         ],
       }),
     });
 
-    if (!claudeResponse.ok) {
-      const errBody = await claudeResponse.text();
-      console.error("Claude API error:", claudeResponse.status, errBody);
-      throw new Error(`Claude API returned ${claudeResponse.status}`);
+    if (!geminiResponse.ok) {
+      const errBody = await geminiResponse.text();
+      console.error("Gemini API error:", geminiResponse.status, errBody);
+      throw new Error(`Gemini API returned ${geminiResponse.status}`);
     }
 
-    const claudeData = await claudeResponse.json();
-    const rawText = claudeData.content?.[0]?.text || "[]";
+    const geminiData = await geminiResponse.json();
+    let rawText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || "[]";
 
-    // Parse the JSON array from Claude's response
+    // Clean up markdown code blocks if Gemini returns them
+    rawText = rawText.replace(/```json\n/g, "").replace(/```/g, "").trim();
+
+    // Parse the JSON array from Gemini's response
     let jobTitles: string[];
     try {
       jobTitles = JSON.parse(rawText);

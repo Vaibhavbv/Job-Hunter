@@ -24,7 +24,7 @@ serve(async (req: Request) => {
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY")!;
+    const geminiKey = Deno.env.get("GEMINI_API_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     // Fetch resume text
@@ -67,28 +67,28 @@ Title: ${job.title}
 Company: ${job.company}
 ${job.jd_text ? `\nDescription:\n${job.jd_text.slice(0, 4000)}` : ""}`;
 
-    const claudeResponse = await fetch("https://api.anthropic.com/v1/messages", {
+    const geminiResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-api-key": anthropicKey,
-        "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({
-        model: "claude-3-5-sonnet-latest",
-        max_tokens: 4096,
-        messages: [{ role: "user", content: prompt }],
+        contents: [
+          {
+            parts: [{ text: prompt }],
+          },
+        ],
       }),
     });
 
-    if (!claudeResponse.ok) {
-      const errBody = await claudeResponse.text();
-      console.error("Claude rewrite error:", claudeResponse.status, errBody);
-      throw new Error(`Claude API returned ${claudeResponse.status}`);
+    if (!geminiResponse.ok) {
+      const errBody = await geminiResponse.text();
+      console.error("Gemini rewrite error:", geminiResponse.status, errBody);
+      throw new Error(`Gemini API returned ${geminiResponse.status}`);
     }
 
-    const claudeData = await claudeResponse.json();
-    const rewrittenResume = claudeData.content?.[0]?.text || "";
+    const geminiData = await geminiResponse.json();
+    const rewrittenResume = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || "";
 
     return new Response(
       JSON.stringify({ rewritten_resume: rewrittenResume }),
