@@ -67,7 +67,7 @@ Title: ${job.title}
 Company: ${job.company}
 ${job.jd_text ? `\nDescription:\n${job.jd_text.slice(0, 4000)}` : ""}`;
 
-    const geminiResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`, {
+    const geminiResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${geminiKey}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
