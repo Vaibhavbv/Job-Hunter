@@ -13,6 +13,8 @@ const JobsBoard = lazy(() => import('./pages/JobsBoard'))
 const Tracker = lazy(() => import('./pages/Tracker'))
 const Analytics = lazy(() => import('./pages/Analytics'))
 const Settings = lazy(() => import('./pages/Settings'))
+const ResumeUpload = lazy(() => import('./pages/ResumeUpload'))
+const AIDashboard = lazy(() => import('./pages/AIDashboard'))
 
 // Loading fallback with shimmer
 function PageLoader() {
@@ -54,6 +56,8 @@ export default function App() {
                   <Route path="/tracker" element={<Tracker />} />
                   <Route path="/analytics" element={<Analytics />} />
                   <Route path="/settings" element={<Settings />} />
+                  <Route path="/upload" element={<ResumeUpload />} />
+                  <Route path="/ai-dashboard" element={<AIDashboard />} />
                 </Routes>
               </Suspense>
             </AnimatePresence>

@@ -5,6 +5,8 @@ import { useTheme } from '../hooks/useTheme'
 const navItems = [
   { to: '/', label: 'Dashboard', icon: '◈' },
   { to: '/jobs', label: 'Jobs', icon: '⬡' },
+  { to: '/upload', label: 'Resume', icon: '📄' },
+  { to: '/ai-dashboard', label: 'AI Match', icon: '🎯' },
   { to: '/tracker', label: 'Tracker', icon: '◫' },
   { to: '/analytics', label: 'Analytics', icon: '◩' },
   { to: '/settings', label: 'Settings', icon: '⚙' },
