@@ -6,8 +6,8 @@ import { useSession } from '../hooks/useSession'
 // We'll use the legacy build of pdfjs-dist for broadest compatibility
 import * as pdfjsLib from 'pdfjs-dist'
 
-// Point the worker to the CDN build matching our installed version
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`
+// Point the worker to unpkg CDN (mirrors npm, always has latest versions)
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`
 
 const container = {
   hidden: { opacity: 0 },
