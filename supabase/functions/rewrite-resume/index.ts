@@ -75,7 +75,7 @@ ${job.jd_text ? `\nDescription:\n${job.jd_text.slice(0, 4000)}` : ""}`;
         "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
+        model: "claude-3-5-sonnet-latest",
         max_tokens: 4096,
         messages: [{ role: "user", content: prompt }],
       }),
