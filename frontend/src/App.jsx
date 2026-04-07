@@ -6,10 +6,13 @@ import SplashScreen from './components/SplashScreen'
 import Toast, { ToastProvider } from './components/Toast'
 import CommandPalette from './components/CommandPalette'
 import { ThemeProvider } from './hooks/useTheme'
+import { AuthProvider } from './hooks/useAuth'
+import ProtectedRoute from './components/ProtectedRoute'
 
 // Lazy-loaded pages
-const Dashboard = lazy(() => import('./pages/Dashboard'))
+const AuthPage = lazy(() => import('./pages/AuthPage'))
 const JobsBoard = lazy(() => import('./pages/JobsBoard'))
+const Dashboard = lazy(() => import('./pages/Dashboard'))
 const Tracker = lazy(() => import('./pages/Tracker'))
 const Analytics = lazy(() => import('./pages/Analytics'))
 const Settings = lazy(() => import('./pages/Settings'))
@@ -41,29 +44,56 @@ export default function App() {
     return <SplashScreen />
   }
 
+  const isAuthPage = location.pathname === '/auth'
+
   return (
     <ThemeProvider>
-      <ToastProvider>
-        <div className="min-h-screen bg-dark-bg dark:bg-dark-bg relative">
-          <Navbar />
-          <CommandPalette />
-          <main className="pt-4">
-            <AnimatePresence mode="wait">
-              <Suspense fallback={<PageLoader />} key={location.pathname}>
-                <Routes location={location}>
-                  <Route path="/" element={<Dashboard />} />
-                  <Route path="/jobs" element={<JobsBoard />} />
-                  <Route path="/tracker" element={<Tracker />} />
-                  <Route path="/analytics" element={<Analytics />} />
-                  <Route path="/settings" element={<Settings />} />
-                  <Route path="/upload" element={<ResumeUpload />} />
-                  <Route path="/ai-dashboard" element={<AIDashboard />} />
-                </Routes>
-              </Suspense>
-            </AnimatePresence>
-          </main>
-        </div>
-      </ToastProvider>
+      <AuthProvider>
+        <ToastProvider>
+          <div className="min-h-screen bg-dark-bg dark:bg-dark-bg relative">
+            {/* Subtle noise overlay on all pages */}
+            <div className="noise-overlay" />
+
+            {/* Only show navbar when not on auth page */}
+            {!isAuthPage && <Navbar />}
+            {!isAuthPage && <CommandPalette />}
+
+            <main className={isAuthPage ? '' : 'pt-4'}>
+              <AnimatePresence mode="wait">
+                <Suspense fallback={<PageLoader />} key={location.pathname}>
+                  <Routes location={location}>
+                    {/* Public route */}
+                    <Route path="/auth" element={<AuthPage />} />
+
+                    {/* Protected routes */}
+                    <Route path="/" element={
+                      <ProtectedRoute><JobsBoard /></ProtectedRoute>
+                    } />
+                    <Route path="/dashboard" element={
+                      <ProtectedRoute><Dashboard /></ProtectedRoute>
+                    } />
+                    <Route path="/tracker" element={
+                      <ProtectedRoute><Tracker /></ProtectedRoute>
+                    } />
+                    <Route path="/analytics" element={
+                      <ProtectedRoute><Analytics /></ProtectedRoute>
+                    } />
+                    <Route path="/settings" element={
+                      <ProtectedRoute><Settings /></ProtectedRoute>
+                    } />
+                    <Route path="/upload" element={
+                      <ProtectedRoute><ResumeUpload /></ProtectedRoute>
+                    } />
+                    <Route path="/ai-dashboard" element={
+                      <ProtectedRoute><AIDashboard /></ProtectedRoute>
+                    } />
+                  </Routes>
+                </Suspense>
+              </AnimatePresence>
+            </main>
+          </div>
+        </ToastProvider>
+      </AuthProvider>
     </ThemeProvider>
   )
 }

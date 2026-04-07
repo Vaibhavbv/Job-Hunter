@@ -1,6 +1,18 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { supabase } from './useSupabase'
 
+// Client-side inference for jobs that don't have work_mode set in DB
+function inferWorkMode(job) {
+  if (job.work_mode) return job.work_mode
+
+  const text = `${job.location || ''} ${job.description || ''} ${job.title || ''}`.toLowerCase()
+
+  if (/\b(remote|work from home|wfh|telecommute|anywhere)\b/.test(text)) return 'Remote'
+  if (/\b(hybrid|flex|flexible.?work)\b/.test(text)) return 'Hybrid'
+  if (/\b(on[\s-]?site|onsite|in[\s-]?office|office[\s-]?based)\b/.test(text)) return 'On-site'
+  return null
+}
+
 export function useJobs() {
   const [jobs, setJobs] = useState([])
   const [loading, setLoading] = useState(true)
@@ -9,8 +21,9 @@ export function useJobs() {
     search: '',
     platform: null,
     role: null,
-    dateRange: 'all', // 'all' | 'today' | '7days' | '30days'
-    sort: 'date', // 'date' | 'salary' | 'company'
+    workMode: null,      // 'Remote' | 'Hybrid' | 'On-site' | null
+    dateRange: 'all',    // 'all' | 'today' | '7days' | '30days'
+    sort: 'date',        // 'date' | 'salary' | 'company'
   })
 
   const fetchJobs = useCallback(async () => {
@@ -23,7 +36,14 @@ export function useJobs() {
         .order('created_at', { ascending: false })
 
       if (err) throw err
-      setJobs(data || [])
+
+      // Enrich each job with inferred work_mode
+      const enriched = (data || []).map(j => ({
+        ...j,
+        work_mode: inferWorkMode(j),
+      }))
+
+      setJobs(enriched)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -59,6 +79,11 @@ export function useJobs() {
       result = result.filter(j => j.role_type === filters.role)
     }
 
+    // Work mode filter
+    if (filters.workMode) {
+      result = result.filter(j => j.work_mode === filters.workMode)
+    }
+
     // Date range
     if (filters.dateRange !== 'all') {
       const now = new Date()
@@ -84,7 +109,6 @@ export function useJobs() {
     if (filters.sort === 'company') {
       result.sort((a, b) => (a.company || '').localeCompare(b.company || ''))
     } else if (filters.sort === 'salary') {
-      // Sort by presence of salary first, then alphabetically
       result.sort((a, b) => {
         if (a.salary && !b.salary) return -1
         if (!a.salary && b.salary) return 1
@@ -105,6 +129,9 @@ export function useJobs() {
       linkedin: jobs.filter(j => j.platform === 'LinkedIn').length,
       naukri: jobs.filter(j => j.platform === 'Naukri').length,
       indeed: jobs.filter(j => j.platform === 'Indeed').length,
+      remote: jobs.filter(j => j.work_mode === 'Remote').length,
+      hybrid: jobs.filter(j => j.work_mode === 'Hybrid').length,
+      onsite: jobs.filter(j => j.work_mode === 'On-site').length,
       lastUpdated: jobs.length > 0
         ? jobs.reduce((a, b) => (a.created_at || '') > (b.created_at || '') ? a : b).created_at
         : null,
@@ -116,6 +143,7 @@ export function useJobs() {
     platforms: [...new Set(jobs.map(j => j.platform).filter(Boolean))],
     roles: [...new Set(jobs.map(j => j.role_type).filter(Boolean))],
     locations: [...new Set(jobs.map(j => j.location).filter(Boolean))],
+    workModes: [...new Set(jobs.map(j => j.work_mode).filter(Boolean))],
   }), [jobs])
 
   return {

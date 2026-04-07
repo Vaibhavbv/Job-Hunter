@@ -13,11 +13,19 @@ serve(async (req: Request) => {
   }
 
   try {
-    const { session_id, job_id } = await req.json();
+    const { session_id, job_id, custom_jd, custom_title, custom_company } = await req.json();
 
-    if (!session_id || !job_id) {
+    if (!session_id) {
       return new Response(
-        JSON.stringify({ error: "session_id and job_id are required" }),
+        JSON.stringify({ error: "session_id is required" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Need either job_id or custom_jd
+    if (!job_id && !custom_jd) {
+      return new Response(
+        JSON.stringify({ error: "Either job_id or custom_jd is required" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -41,31 +49,41 @@ serve(async (req: Request) => {
       );
     }
 
-    // Fetch job description
-    const { data: job, error: jobError } = await supabase
-      .from("ai_jobs")
-      .select("*")
-      .eq("id", job_id)
-      .eq("session_id", session_id)
-      .single();
+    let jobTitle = custom_title || "Target Role";
+    let jobCompany = custom_company || "Target Company";
+    let jobDescription = custom_jd || "";
 
-    if (jobError || !job) {
-      return new Response(
-        JSON.stringify({ error: "Job not found" }),
-        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    // If job_id is provided, fetch from DB
+    if (job_id) {
+      const { data: job, error: jobError } = await supabase
+        .from("ai_jobs")
+        .select("*")
+        .eq("id", job_id)
+        .eq("session_id", session_id)
+        .single();
+
+      if (jobError || !job) {
+        return new Response(
+          JSON.stringify({ error: "Job not found" }),
+          { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      jobTitle = job.title;
+      jobCompany = job.company;
+      jobDescription = job.jd_text || "";
     }
 
-    // Call Claude to rewrite resume
+    // Call Gemini to rewrite resume
     const prompt = `Rewrite this resume to better match this job description. Keep all facts true, only reframe wording, reorder bullet points, and emphasize matching skills. Return the full rewritten resume as plain text.
 
 ORIGINAL RESUME:
 ${session.resume_text.slice(0, 8000)}
 
 JOB DESCRIPTION:
-Title: ${job.title}
-Company: ${job.company}
-${job.jd_text ? `\nDescription:\n${job.jd_text.slice(0, 4000)}` : ""}`;
+Title: ${jobTitle}
+Company: ${jobCompany}
+${jobDescription ? `\nDescription:\n${jobDescription.slice(0, 4000)}` : ""}`;
 
     const geminiResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`, {
       method: "POST",

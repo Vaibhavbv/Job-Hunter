@@ -1,7 +1,8 @@
 import { useState, useMemo, useCallback } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
 import { useJobs } from '../hooks/useJobs'
-import { SkeletonGrid } from '../components/SkeletonLoader'
+import { useAuth } from '../hooks/useAuth'
+import AnimatedCounter from '../components/AnimatedCounter'
 
 const SORT_OPTIONS = [
   { value: 'date', label: 'Latest' },
@@ -16,6 +17,13 @@ const DATE_OPTIONS = [
   { value: '30days', label: '30 Days' },
 ]
 
+const WORK_MODE_OPTIONS = [
+  { value: null, label: 'All Modes' },
+  { value: 'Remote', label: 'Remote', dot: '#10b981', badgeClass: 'badge-remote' },
+  { value: 'Hybrid', label: 'Hybrid', dot: '#f59e0b', badgeClass: 'badge-hybrid' },
+  { value: 'On-site', label: 'On-site', dot: '#38bdf8', badgeClass: 'badge-onsite' },
+]
+
 const PLATFORM_STYLES = {
   LinkedIn: { dot: '#0a66c2', activeBg: 'bg-linkedin/10', activeBorder: 'border-linkedin/30', activeText: 'text-linkedin' },
   Naukri:   { dot: '#16a34a', activeBg: 'bg-naukri/10',   activeBorder: 'border-naukri/30',   activeText: 'text-naukri' },
@@ -24,6 +32,7 @@ const PLATFORM_STYLES = {
 
 export default function JobsBoard() {
   const { jobs, allJobs, loading, filters, setFilters, filterOptions, stats } = useJobs()
+  const { profile } = useAuth()
   const [selectedJob, setSelectedJob] = useState(null)
   const [showBookmarksOnly, setShowBookmarksOnly] = useState(false)
   const [bookmarks, setBookmarks] = useState(() => {
@@ -45,7 +54,7 @@ export default function JobsBoard() {
   }, [setFilters])
 
   const clearAllFilters = useCallback(() => {
-    setFilters({ search: '', platform: null, role: null, dateRange: 'all', sort: 'date' })
+    setFilters({ search: '', platform: null, role: null, workMode: null, dateRange: 'all', sort: 'date' })
     setShowBookmarksOnly(false)
   }, [setFilters])
 
@@ -60,6 +69,7 @@ export default function JobsBoard() {
     let count = 0
     if (filters.platform) count++
     if (filters.role) count++
+    if (filters.workMode) count++
     if (filters.dateRange !== 'all') count++
     if (filters.search) count++
     if (showBookmarksOnly) count++
@@ -80,6 +90,32 @@ export default function JobsBoard() {
     return c
   }, [allJobs])
 
+  // Work mode counts
+  const workModeCounts = useMemo(() => {
+    const c = {}
+    allJobs.forEach(j => { if (j.work_mode) c[j.work_mode] = (c[j.work_mode] || 0) + 1 })
+    return c
+  }, [allJobs])
+
+  // Format last updated
+  const lastUpdated = useMemo(() => {
+    if (!stats.lastUpdated) return null
+    const d = new Date(stats.lastUpdated)
+    return d.toLocaleString('en-IN', {
+      day: 'numeric', month: 'short',
+      hour: '2-digit', minute: '2-digit',
+    })
+  }, [stats.lastUpdated])
+
+  const greeting = useMemo(() => {
+    const hour = new Date().getHours()
+    if (hour < 12) return 'Good morning'
+    if (hour < 17) return 'Good afternoon'
+    return 'Good evening'
+  }, [])
+
+  const firstName = profile?.full_name?.split(' ')[0] || 'there'
+
   return (
     <motion.div
       className="max-w-[1400px] mx-auto px-4 sm:px-6 pb-12"
@@ -95,12 +131,18 @@ export default function JobsBoard() {
       >
         <div>
           <h1 className="font-display font-bold text-3xl tracking-tight">
-            Jobs <span className="text-accent">Board</span>
+            {greeting}, <span className="gradient-text">{firstName}</span>
           </h1>
           <p className="text-dark-muted text-sm font-mono mt-1">
-            Showing <span className="text-white font-bold">{displayJobs.length}</span> of {allJobs.length} targets
+            Showing <span className="text-white font-bold">{displayJobs.length}</span> of {allJobs.length} opportunities
             {activeFilterCount > 0 && (
               <span className="text-accent ml-2">· {activeFilterCount} filter{activeFilterCount > 1 ? 's' : ''} active</span>
+            )}
+            {lastUpdated && (
+              <span className="text-dark-muted/60 ml-3">
+                <span className="inline-block w-1.5 h-1.5 rounded-full bg-accent animate-pulse-dot mr-1 align-middle" />
+                Last sync: {lastUpdated}
+              </span>
             )}
           </p>
         </div>
@@ -130,12 +172,27 @@ export default function JobsBoard() {
         </div>
       </motion.div>
 
+      {/* ─── INLINE STATS ─── */}
+      <motion.div
+        className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3 mb-5"
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.05 }}
+      >
+        <MiniStat label="Total Jobs" value={stats.total} accent />
+        <MiniStat label="Added Today" value={stats.today} />
+        <MiniStat label="LinkedIn" value={stats.linkedin} color="#0a66c2" />
+        <MiniStat label="Naukri" value={stats.naukri} color="#16a34a" />
+        <MiniStat label="Remote" value={stats.remote} color="#10b981" />
+        <MiniStat label="Hybrid" value={stats.hybrid} color="#f59e0b" />
+      </motion.div>
+
       {/* ─── SEARCH BAR ─── */}
       <motion.div
         className="mb-5"
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.05 }}
+        transition={{ delay: 0.08 }}
       >
         <div className="relative">
           <span className="absolute left-4 top-1/2 -translate-y-1/2 text-dark-muted text-base">⌕</span>
@@ -144,12 +201,13 @@ export default function JobsBoard() {
             value={filters.search}
             onChange={e => updateFilter('search', e.target.value)}
             placeholder="Search by title, company, or location..."
-            className="w-full pl-11 pr-4 py-3.5 bg-dark-card border border-dark-border rounded-2xl text-base font-mono outline-none focus:border-accent/40 transition-colors placeholder:text-dark-muted/40"
+            className="premium-input w-full pl-11 pr-4 py-3.5 rounded-2xl text-base"
+            id="jobs-search-input"
           />
           {filters.search && (
             <button
               onClick={() => updateFilter('search', '')}
-              className="absolute right-4 top-1/2 -translate-y-1/2 text-dark-muted hover:text-white"
+              className="absolute right-4 top-1/2 -translate-y-1/2 text-dark-muted hover:text-white transition-colors"
             >✕</button>
           )}
         </div>
@@ -162,7 +220,7 @@ export default function JobsBoard() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.1 }}
       >
-        {/* Row 1: Source + Time Range */}
+        {/* Row 1: Source + Work Mode + Time Range */}
         <div className="flex flex-wrap items-start gap-6">
           {/* Source Category */}
           <FilterCategory label="Source">
@@ -190,8 +248,22 @@ export default function JobsBoard() {
             })}
           </FilterCategory>
 
+          {/* Work Mode */}
+          <FilterCategory label="Mode">
+            {WORK_MODE_OPTIONS.map(opt => (
+              <Chip
+                key={opt.label}
+                label={opt.label}
+                count={opt.value ? (workModeCounts[opt.value] || 0) : undefined}
+                active={filters.workMode === opt.value}
+                onClick={() => updateFilter('workMode', opt.value)}
+                dotColor={opt.dot}
+              />
+            ))}
+          </FilterCategory>
+
           {/* Time Range */}
-          <FilterCategory label="Time Range">
+          <FilterCategory label="Time">
             {DATE_OPTIONS.map(opt => (
               <Chip
                 key={opt.value}
@@ -203,7 +275,7 @@ export default function JobsBoard() {
           </FilterCategory>
 
           {/* Sort By */}
-          <FilterCategory label="Sort By">
+          <FilterCategory label="Sort">
             {SORT_OPTIONS.map(opt => (
               <Chip
                 key={opt.value}
@@ -216,7 +288,7 @@ export default function JobsBoard() {
         </div>
 
         {/* Row 2: Role Categories */}
-        <FilterCategory label="Role Category">
+        <FilterCategory label="Role">
           <Chip
             label="All Roles"
             active={!filters.role}
@@ -270,10 +342,11 @@ export default function JobsBoard() {
           transition={{ delay: 0.15 }}
         >
           {/* Table Header */}
-          <div className="grid grid-cols-[2fr_1.2fr_1fr_1fr_0.8fr_0.6fr_0.5fr] gap-3 px-5 py-3 border-b border-dark-border bg-dark-bg/50 text-[11px] font-mono text-dark-muted uppercase tracking-widest">
+          <div className="grid grid-cols-[2fr_1.2fr_0.9fr_0.7fr_0.8fr_0.7fr_0.6fr_0.5fr] gap-3 px-5 py-3 border-b border-dark-border bg-dark-bg/50 text-[11px] font-mono text-dark-muted uppercase tracking-widest">
             <span>Position</span>
             <span>Company</span>
             <span>Location</span>
+            <span>Mode</span>
             <span>Salary</span>
             <span>Source</span>
             <span>Posted</span>
@@ -306,11 +379,30 @@ export default function JobsBoard() {
   )
 }
 
+/* ─── Mini Stat Card ────────────────────────────────── */
+function MiniStat({ label, value, color, accent }) {
+  return (
+    <motion.div
+      className="stat-card"
+      whileHover={{ y: -2 }}
+    >
+      <AnimatedCounter
+        value={value}
+        className="font-mono font-bold text-2xl block"
+        style={color ? { color } : undefined}
+      />
+      <span className={`text-[10px] font-mono uppercase tracking-wider mt-1 block ${accent ? 'text-accent' : 'text-dark-muted'}`}>
+        {label}
+      </span>
+    </motion.div>
+  )
+}
+
 /* ─── Filter Category Label ─────────────────────────── */
 function FilterCategory({ label, children }) {
   return (
     <div className="flex items-center gap-2 flex-wrap">
-      <span className="font-mono text-[11px] text-dark-muted uppercase tracking-wider font-bold w-16 shrink-0">
+      <span className="font-mono text-[11px] text-dark-muted uppercase tracking-wider font-bold w-14 shrink-0">
         {label}
       </span>
       <div className="flex items-center gap-1.5 flex-wrap">
@@ -351,13 +443,31 @@ function Chip({ label, active, onClick, count, dotColor, activeBg, activeBorder,
   )
 }
 
+/* ─── Work Mode Badge ───────────────────────────────── */
+function WorkModeBadge({ mode }) {
+  if (!mode) return <span className="text-dark-muted/30 text-[11px] font-mono">—</span>
+
+  const config = {
+    'Remote':  { cls: 'badge-remote', icon: '🏠' },
+    'Hybrid':  { cls: 'badge-hybrid', icon: '🔄' },
+    'On-site': { cls: 'badge-onsite', icon: '🏢' },
+  }[mode] || { cls: '', icon: '' }
+
+  return (
+    <span className={`inline-flex items-center gap-1 text-[10px] font-mono font-semibold px-2 py-0.5 rounded-md border ${config.cls}`}>
+      <span className="text-[9px]">{config.icon}</span>
+      {mode}
+    </span>
+  )
+}
+
 /* ─── Table Row ─────────────────────────────────────── */
 function JobRow({ job, index, onClick, onBookmark, isBookmarked }) {
   const platformStyle = PLATFORM_STYLES[job.platform] || {}
 
   return (
     <motion.div
-      className="grid grid-cols-[2fr_1.2fr_1fr_1fr_0.8fr_0.6fr_0.5fr] gap-3 px-5 py-3.5 border-b border-dark-border/40 hover:bg-dark-hover/50 cursor-pointer transition-colors group items-center"
+      className="job-row-card grid-cols-[2fr_1.2fr_0.9fr_0.7fr_0.8fr_0.7fr_0.6fr_0.5fr] group"
       onClick={() => onClick(job)}
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
@@ -388,6 +498,11 @@ function JobRow({ job, index, onClick, onBookmark, isBookmarked }) {
       <span className="text-sm text-dark-muted truncate">
         {job.location || '—'}
       </span>
+
+      {/* Work Mode */}
+      <div>
+        <WorkModeBadge mode={job.work_mode} />
+      </div>
 
       {/* Salary */}
       <span className={`text-sm truncate ${job.salary ? 'text-emerald-400 font-medium' : 'text-dark-muted/40'}`}>
@@ -465,7 +580,10 @@ function JobDetailModal({ job, onClose }) {
           <div>
             <h2 className="font-display font-bold text-xl">{job.title}</h2>
             <p className="text-dark-muted text-base mt-1">{job.company}</p>
-            {job.location && <p className="text-dark-muted/60 text-sm mt-0.5">📍 {job.location}</p>}
+            <div className="flex items-center gap-3 mt-2">
+              {job.location && <p className="text-dark-muted/60 text-sm">📍 {job.location}</p>}
+              <WorkModeBadge mode={job.work_mode} />
+            </div>
           </div>
           <motion.button
             onClick={onClose}
@@ -502,7 +620,7 @@ function JobDetailModal({ job, onClose }) {
               href={job.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="block w-full text-center py-3.5 rounded-xl bg-accent text-dark-bg font-display font-bold text-base hover:bg-accent-dim transition-colors"
+              className="premium-btn block w-full text-center py-3.5 rounded-xl text-base"
             >
               Apply Now →
             </a>
@@ -555,6 +673,5 @@ function formatDate(dateStr) {
 
 function formatSalary(s) {
   if (!s) return '—'
-  // Truncate very long salary strings
   return s.length > 30 ? s.slice(0, 28) + '…' : s
 }

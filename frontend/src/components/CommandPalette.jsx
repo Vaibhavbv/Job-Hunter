@@ -1,11 +1,13 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'motion/react'
-import { useJobs } from '../hooks/useJobs'
+import { useAuth } from '../hooks/useAuth'
 
 const routes = [
-  { name: 'Dashboard', path: '/', icon: '◈' },
-  { name: 'Jobs Board', path: '/jobs', icon: '⬡' },
+  { name: 'Jobs Board', path: '/', icon: '⬡' },
+  { name: 'Overview', path: '/dashboard', icon: '◈' },
+  { name: 'Resume', path: '/upload', icon: '📄' },
+  { name: 'AI Match', path: '/ai-dashboard', icon: '🎯' },
   { name: 'Tracker', path: '/tracker', icon: '◫' },
   { name: 'Analytics', path: '/analytics', icon: '◩' },
   { name: 'Settings', path: '/settings', icon: '⚙' },
@@ -16,6 +18,7 @@ export default function CommandPalette() {
   const [query, setQuery] = useState('')
   const inputRef = useRef(null)
   const navigate = useNavigate()
+  const { signOut } = useAuth()
 
   // Open with Cmd+K / Ctrl+K
   useEffect(() => {
@@ -37,15 +40,26 @@ export default function CommandPalette() {
     }
   }, [open])
 
-  // Search results
-  const filteredRoutes = useMemo(() => {
-    if (!query) return routes
-    const q = query.toLowerCase()
-    return routes.filter(r => r.name.toLowerCase().includes(q))
-  }, [query])
+  // All commands including sign out
+  const allCommands = useMemo(() => [
+    ...routes.map(r => ({ ...r, type: 'navigate' })),
+    { name: 'Sign Out', path: null, icon: '↪', type: 'action', action: 'signout' },
+  ], [])
 
-  const handleSelect = (path) => {
-    navigate(path)
+  // Search results
+  const filteredCommands = useMemo(() => {
+    if (!query) return allCommands
+    const q = query.toLowerCase()
+    return allCommands.filter(r => r.name.toLowerCase().includes(q))
+  }, [query, allCommands])
+
+  const handleSelect = async (cmd) => {
+    if (cmd.type === 'action' && cmd.action === 'signout') {
+      await signOut()
+      navigate('/auth')
+    } else if (cmd.path) {
+      navigate(cmd.path)
+    }
     setOpen(false)
   }
 
@@ -63,7 +77,7 @@ export default function CommandPalette() {
           />
           {/* Palette */}
           <motion.div
-            className="fixed top-[20%] left-1/2 -translate-x-1/2 w-full max-w-lg z-[151] glass border border-dark-border rounded-2xl overflow-hidden shadow-2xl"
+            className="fixed top-[20%] left-1/2 -translate-x-1/2 w-full max-w-lg z-[151] bg-dark-card border border-dark-border rounded-2xl overflow-hidden shadow-premium"
             initial={{ opacity: 0, scale: 0.95, y: -10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: -10 }}
@@ -77,8 +91,9 @@ export default function CommandPalette() {
                 type="text"
                 value={query}
                 onChange={e => setQuery(e.target.value)}
-                placeholder="Search pages, jobs, commands..."
+                placeholder="Search pages, commands..."
                 className="w-full py-3 bg-transparent text-sm font-mono outline-none placeholder:text-dark-muted"
+                id="command-palette-input"
               />
               <kbd className="text-[10px] font-mono text-dark-muted bg-dark-bg px-1.5 py-0.5 rounded border border-dark-border">
                 ESC
@@ -87,21 +102,25 @@ export default function CommandPalette() {
 
             {/* Results */}
             <div className="max-h-64 overflow-y-auto py-2">
-              {filteredRoutes.length === 0 ? (
+              {filteredCommands.length === 0 ? (
                 <div className="px-4 py-6 text-center text-dark-muted text-sm font-mono">
                   No results found
                 </div>
               ) : (
-                filteredRoutes.map((item, i) => (
+                filteredCommands.map((item, i) => (
                   <motion.button
-                    key={item.path}
-                    onClick={() => handleSelect(item.path)}
-                    className="w-full px-4 py-2.5 flex items-center gap-3 hover:bg-dark-hover transition-colors text-left"
+                    key={item.name}
+                    onClick={() => handleSelect(item)}
+                    className={`w-full px-4 py-2.5 flex items-center gap-3 hover:bg-dark-hover transition-colors text-left ${
+                      item.action === 'signout' ? 'text-red-400 hover:text-red-300' : ''
+                    }`}
                     initial={{ opacity: 0, x: -10 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: i * 0.03 }}
                   >
-                    <span className="text-accent font-mono text-sm">{item.icon}</span>
+                    <span className={`font-mono text-sm ${item.action === 'signout' ? '' : 'text-accent'}`}>
+                      {item.icon}
+                    </span>
                     <span className="text-sm">{item.name}</span>
                   </motion.button>
                 ))
