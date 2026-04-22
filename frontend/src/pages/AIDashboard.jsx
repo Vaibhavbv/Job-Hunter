@@ -196,7 +196,7 @@ export default function AIDashboard() {
           </h3>
           <p className="text-dark-muted text-xs font-mono mt-2">
             {step === 'fetching' ? 'Searching 5 titles × 3 results each' :
-             step === 'scoring' ? 'Claude is analyzing each job against your resume' :
+             step === 'scoring' ? 'AI is analyzing each job against your resume' :
              'Please wait...'}
           </p>
         </motion.div>

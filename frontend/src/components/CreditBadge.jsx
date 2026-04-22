@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
-
-const SUPABASE_FUNCTIONS_URL = 'https://qlvnnrmilwfxzlotduld.supabase.co/functions/v1'
+import * as api from '../services/api'
 
 export default function CreditBadge() {
   const [credits, setCredits] = useState(null)
@@ -10,15 +9,8 @@ export default function CreditBadge() {
   useEffect(() => {
     async function load() {
       try {
-        const resp = await fetch(`${SUPABASE_FUNCTIONS_URL}/check-credits`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({}),
-        })
-        if (resp.ok) {
-          const data = await resp.json()
-          setCredits(data)
-        }
+        const data = await api.checkCredits()
+        if (data) setCredits(data)
       } catch {
         // silent fail
       } finally {

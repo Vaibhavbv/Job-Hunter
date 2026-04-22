@@ -1,8 +1,10 @@
 import { useState, useMemo, useCallback } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
+import { FixedSizeList as List } from 'react-window'
 import { useJobs } from '../hooks/useJobs'
 import { useAuth } from '../hooks/useAuth'
 import AnimatedCounter from '../components/AnimatedCounter'
+import { hashColor, initials, formatDate, formatSalary } from '../utils/format'
 
 const SORT_OPTIONS = [
   { value: 'date', label: 'Latest' },
@@ -353,18 +355,29 @@ export default function JobsBoard() {
             <span className="text-center">Action</span>
           </div>
 
-          {/* Table Rows */}
-          <div>
-            {displayJobs.map((job, i) => (
-              <JobRow
-                key={job.id || job.dedup_key || i}
-                job={job}
-                index={i}
-                onClick={setSelectedJob}
-                onBookmark={toggleBookmark}
-                isBookmarked={bookmarks.includes(job.id || job.dedup_key)}
-              />
-            ))}
+          {/* Table Rows (Virtual) */}
+          <div style={{ height: '600px', width: '100%' }}>
+            <List
+              height={600}
+              itemCount={displayJobs.length}
+              itemSize={68}
+              width="100%"
+            >
+              {({ index, style }) => {
+                const job = displayJobs[index]
+                return (
+                  <div style={style}>
+                    <JobRow
+                      job={job}
+                      index={index}
+                      onClick={setSelectedJob}
+                      onBookmark={toggleBookmark}
+                      isBookmarked={bookmarks.includes(job.id || job.dedup_key)}
+                    />
+                  </div>
+                )
+              }}
+            </List>
           </div>
         </motion.div>
       )}
@@ -648,30 +661,4 @@ function InfoStat({ label, value, color, highlight }) {
   )
 }
 
-/* ─── Helpers ───────────────────────────────────────── */
-function hashColor(str) {
-  let hash = 0
-  for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash)
-  return `hsl(${Math.abs(hash) % 360}, 55%, 45%)`
-}
-
-function initials(name) {
-  return name.split(/[\s&,]+/).filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join('')
-}
-
-function formatDate(dateStr) {
-  if (!dateStr) return '—'
-  const d = new Date(dateStr + 'T00:00:00')
-  const today = new Date(); today.setHours(0, 0, 0, 0)
-  const diff = Math.round((today - d) / 86400000)
-  if (diff === 0) return 'Today'
-  if (diff === 1) return '1d ago'
-  if (diff < 7) return `${diff}d ago`
-  if (diff < 30) return `${Math.floor(diff / 7)}w ago`
-  return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
-}
-
-function formatSalary(s) {
-  if (!s) return '—'
-  return s.length > 30 ? s.slice(0, 28) + '…' : s
-}
+// hashColor, initials, formatDate, formatSalary imported from '../utils/format'

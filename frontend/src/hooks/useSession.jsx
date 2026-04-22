@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from './useSupabase'
+import * as api from '../services/api'
 
 const SESSION_KEY = 'jh_session_id'
-const SUPABASE_FUNCTIONS_URL = 'https://qlvnnrmilwfxzlotduld.supabase.co/functions/v1'
 
 export function useSession() {
   const [sessionId, setSessionId] = useState(() => localStorage.getItem(SESSION_KEY))
@@ -47,21 +47,14 @@ export function useSession() {
     loadSession()
   }, [sessionId])
 
-  // Parse resume text via edge function
+  // Parse resume text via edge function (now with auth)
   const parseResume = useCallback(async (text) => {
     setLoading(true)
     setStep('parsing')
     setError(null)
 
     try {
-      const resp = await fetch(`${SUPABASE_FUNCTIONS_URL}/parse-resume`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ resume_text: text }),
-      })
-
-      const data = await resp.json()
-      if (!resp.ok) throw new Error(data.error || 'Failed to parse resume')
+      const data = await api.parseResume(text)
 
       localStorage.setItem(SESSION_KEY, data.session_id)
       setSessionId(data.session_id)
@@ -78,7 +71,7 @@ export function useSession() {
     }
   }, [])
 
-  // Fetch jobs via edge function
+  // Fetch jobs via edge function (now with auth)
   const fetchJobs = useCallback(async () => {
     if (!sessionId || jobTitles.length === 0) return
 
@@ -87,14 +80,7 @@ export function useSession() {
     setError(null)
 
     try {
-      const resp = await fetch(`${SUPABASE_FUNCTIONS_URL}/fetch-jobs`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ session_id: sessionId, job_titles: jobTitles }),
-      })
-
-      const data = await resp.json()
-      if (!resp.ok) throw new Error(data.error || 'Failed to fetch jobs')
+      const data = await api.fetchJobs(sessionId, jobTitles)
 
       setAiJobs(data.jobs || [])
       return data
@@ -107,7 +93,7 @@ export function useSession() {
     }
   }, [sessionId, jobTitles])
 
-  // Score jobs via edge function
+  // Score jobs via edge function (now with auth)
   const scoreJobs = useCallback(async () => {
     if (!sessionId) return
 
@@ -116,14 +102,7 @@ export function useSession() {
     setError(null)
 
     try {
-      const resp = await fetch(`${SUPABASE_FUNCTIONS_URL}/score-jobs`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ session_id: sessionId }),
-      })
-
-      const data = await resp.json()
-      if (!resp.ok) throw new Error(data.error || 'Failed to score jobs')
+      const data = await api.scoreJobs(sessionId)
 
       setAiJobs(data.jobs || [])
       return data
@@ -136,7 +115,7 @@ export function useSession() {
     }
   }, [sessionId])
 
-  // Rewrite resume for a specific job
+  // Rewrite resume for a specific job (now with auth)
   const rewriteResume = useCallback(async (jobId) => {
     if (!sessionId) return
 
@@ -145,15 +124,7 @@ export function useSession() {
     setError(null)
 
     try {
-      const resp = await fetch(`${SUPABASE_FUNCTIONS_URL}/rewrite-resume`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ session_id: sessionId, job_id: jobId }),
-      })
-
-      const data = await resp.json()
-      if (!resp.ok) throw new Error(data.error || 'Failed to rewrite resume')
-
+      const data = await api.rewriteResume(sessionId, { job_id: jobId })
       return data.rewritten_resume
     } catch (err) {
       setError(err.message)
@@ -164,19 +135,10 @@ export function useSession() {
     }
   }, [sessionId])
 
-  // Check Apify credits
+  // Check Apify credits (now with auth)
   const checkCredits = useCallback(async () => {
     try {
-      const resp = await fetch(`${SUPABASE_FUNCTIONS_URL}/check-credits`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
-      })
-
-      const data = await resp.json()
-      if (!resp.ok) return null
-
-      return data
+      return await api.checkCredits()
     } catch {
       return null
     }

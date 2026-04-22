@@ -13,6 +13,15 @@ serve(async (req: Request) => {
   }
 
   try {
+    // Authenticate the user via JWT
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized: Missing Authorization header" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const { session_id, job_id, custom_jd, custom_title, custom_company } = await req.json();
 
     if (!session_id) {
@@ -31,11 +40,24 @@ serve(async (req: Request) => {
     }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const geminiKey = Deno.env.get("GEMINI_API_KEY")!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Fetch resume text
+    // Initialize Supabase with the user's JWT to enforce RLS
+    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
+
+    // Verify the user is authenticated
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError || !user) {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized: Invalid token" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Fetch resume text — RLS ensures user can only access their own sessions
     const { data: session, error: sessionError } = await supabase
       .from("user_sessions")
       .select("resume_text")

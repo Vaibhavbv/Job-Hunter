@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -12,6 +13,31 @@ serve(async (req: Request) => {
   }
 
   try {
+    // Authenticate the user via JWT
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized: Missing Authorization header" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+
+    // Verify user is authenticated
+    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
+
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError || !user) {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized: Invalid token" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const apifyToken = Deno.env.get("APIFY_TOKEN");
     if (!apifyToken) {
       throw new Error("APIFY_TOKEN not configured");
@@ -26,7 +52,7 @@ serve(async (req: Request) => {
     const userData = await resp.json();
     const plan = userData.data?.plan || {};
     const monthlyUsage = plan.monthlyUsageUsd || userData.data?.proxy?.monthlyUsageUsd || 0;
-    const monthlyLimit = plan.monthlyUsageLimitUsd || 5.0; // Default free tier
+    const monthlyLimit = plan.monthlyUsageLimitUsd || 5.0;
 
     // Calculate remaining percentage and estimated runs
     const used = Number(monthlyUsage) || 0;

@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
+import * as api from '../services/api'
+import { scoreColor } from '../utils/format'
 
 export default function ResumeRewriteModal({ job, sessionId, onClose }) {
   const [rewrittenResume, setRewrittenResume] = useState('')
@@ -7,19 +9,11 @@ export default function ResumeRewriteModal({ job, sessionId, onClose }) {
   const [error, setError] = useState(null)
   const [showRewrite, setShowRewrite] = useState(false)
 
-  const SUPABASE_FUNCTIONS_URL = 'https://qlvnnrmilwfxzlotduld.supabase.co/functions/v1'
-
   const handleRewrite = async () => {
     setLoading(true)
     setError(null)
     try {
-      const resp = await fetch(`${SUPABASE_FUNCTIONS_URL}/rewrite-resume`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ session_id: sessionId, job_id: job.id }),
-      })
-      const data = await resp.json()
-      if (!resp.ok) throw new Error(data.error || 'Failed to rewrite resume')
+      const data = await api.rewriteResume(sessionId, { job_id: job.id })
       setRewrittenResume(data.rewritten_resume)
       setShowRewrite(true)
     } catch (err) {
@@ -39,13 +33,6 @@ export default function ResumeRewriteModal({ job, sessionId, onClose }) {
     a.click()
     document.body.removeChild(a)
     URL.revokeObjectURL(url)
-  }
-
-  // Score color
-  const scoreColor = (score) => {
-    if (score >= 75) return '#00ff88'
-    if (score >= 50) return '#fbbf24'
-    return '#ef4444'
   }
 
   const reasons = Array.isArray(job.reasons) ? job.reasons : []

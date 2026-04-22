@@ -14,6 +14,15 @@ serve(async (req: Request) => {
   }
 
   try {
+    // Authenticate the user via JWT
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized: Missing Authorization header" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const { resume_text } = await req.json();
 
     if (!resume_text || typeof resume_text !== "string" || resume_text.trim().length < 50) {
@@ -23,12 +32,29 @@ serve(async (req: Request) => {
       );
     }
 
-    // Call Gemini API to extract job titles
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const geminiKey = Deno.env.get("GEMINI_API_KEY");
+
     if (!geminiKey) {
       throw new Error("GEMINI_API_KEY not configured");
     }
 
+    // Initialize Supabase with the user's JWT to enforce RLS
+    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
+
+    // Get the authenticated user's ID
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError || !user) {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized: Invalid token" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Call Gemini API to extract job titles
     const geminiResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`, {
       method: "POST",
       headers: {
@@ -66,7 +92,7 @@ serve(async (req: Request) => {
       if (!Array.isArray(jobTitles)) throw new Error("Not an array");
       jobTitles = jobTitles.slice(0, 5).map((t: unknown) => String(t).trim());
     } catch {
-      console.error("Failed to parse Claude response as JSON array:", rawText);
+      console.error("Failed to parse Gemini response as JSON array:", rawText);
       // Fallback: try to extract titles from text
       jobTitles = rawText
         .replace(/[\[\]"]/g, "")
@@ -76,21 +102,14 @@ serve(async (req: Request) => {
         .slice(0, 5);
     }
 
-    // Store in Supabase
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
-
-    // Get caller IP for rate limiting
-    const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-               req.headers.get("x-real-ip") || "unknown";
-
+    // Store in Supabase — set user_id for RLS
     const { data: session, error: insertError } = await supabase
       .from("user_sessions")
       .insert({
-        resume_text: resume_text.slice(0, 50000), // cap at 50k chars
+        user_id: user.id,
+        resume_text: resume_text.slice(0, 50000),
         job_titles: jobTitles,
-        ip_address: ip,
+        ip_address: req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown",
       })
       .select("id, job_titles")
       .single();

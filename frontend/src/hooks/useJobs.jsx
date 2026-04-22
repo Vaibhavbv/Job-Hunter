@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useMemo } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { supabase } from './useSupabase'
 
 // Client-side inference for jobs that don't have work_mode set in DB
@@ -14,9 +15,6 @@ function inferWorkMode(job) {
 }
 
 export function useJobs() {
-  const [jobs, setJobs] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
   const [filters, setFilters] = useState({
     search: '',
     platform: null,
@@ -26,9 +24,9 @@ export function useJobs() {
     sort: 'date',        // 'date' | 'salary' | 'company'
   })
 
-  const fetchJobs = useCallback(async () => {
-    setLoading(true)
-    try {
+  const { data: jobs = [], isLoading: loading, error, refetch: fetchJobs } = useQuery({
+    queryKey: ['jobs'],
+    queryFn: async () => {
       const { data, error: err } = await supabase
         .from('jobs')
         .select('*')
@@ -37,23 +35,13 @@ export function useJobs() {
 
       if (err) throw err
 
-      // Enrich each job with inferred work_mode
-      const enriched = (data || []).map(j => ({
+      return (data || []).map(j => ({
         ...j,
         work_mode: inferWorkMode(j),
       }))
-
-      setJobs(enriched)
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    fetchJobs()
-  }, [fetchJobs])
+    },
+    staleTime: 5 * 60 * 1000, // 5 minutes cache
+  })
 
   // Filtered + sorted jobs
   const filteredJobs = useMemo(() => {
@@ -150,7 +138,7 @@ export function useJobs() {
     jobs: filteredJobs,
     allJobs: jobs,
     loading,
-    error,
+    error: error?.message || null,
     stats,
     filters,
     setFilters,

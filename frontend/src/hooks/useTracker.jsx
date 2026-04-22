@@ -1,107 +1,105 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from './useSupabase'
+import { useAuth } from './useAuth'
 
 const COLUMNS = ['Applied', 'Interview', 'Offer', 'Rejected']
 
 export function useTracker() {
+  const { user } = useAuth()
   const [applications, setApplications] = useState([])
   const [loading, setLoading] = useState(true)
 
-  const fetchApplications = useCallback(async () => {
-    setLoading(true)
+  // Load applications from Supabase
+  useEffect(() => {
+    if (!user) {
+      setApplications([])
+      setLoading(false)
+      return
+    }
+
+    async function load() {
+      setLoading(true)
+      try {
+        const { data, error } = await supabase
+          .from('application_tracker')
+          .select('*')
+          .order('updated_at', { ascending: false })
+
+        if (error) throw error
+        setApplications(data || [])
+      } catch (err) {
+        console.error('Failed to load applications:', err)
+        setApplications([])
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    load()
+  }, [user])
+
+  // Add a new application
+  const addApplication = useCallback(async ({ title, company, status = 'Applied', notes = '' }) => {
+    if (!user) return null
     try {
       const { data, error } = await supabase
-        .from('applications')
-        .select('*, jobs(*)')
-        .order('updated_at', { ascending: false })
+        .from('application_tracker')
+        .insert({
+          user_id: user.id,
+          title,
+          company,
+          status,
+          notes,
+        })
+        .select()
+        .single()
 
-      if (error) {
-        // Table might not exist yet — use local state
-        console.warn('Applications table not found, using local state:', error.message)
-        const stored = localStorage.getItem('applications')
-        if (stored) setApplications(JSON.parse(stored))
-        setLoading(false)
-        return
-      }
-      setApplications(data || [])
+      if (error) throw error
+      setApplications(prev => [data, ...prev])
+      return data
     } catch (err) {
-      console.error('Fetch error:', err)
-    } finally {
-      setLoading(false)
+      console.error('Failed to add application:', err)
+      return null
     }
-  }, [])
+  }, [user])
 
-  useEffect(() => {
-    fetchApplications()
-  }, [fetchApplications])
-
-  // Group applications by status column
-  const columns = COLUMNS.reduce((acc, col) => {
-    acc[col] = applications.filter(a => a.status === col)
-    return acc
-  }, {})
-
-  const addApplication = useCallback(async (jobId, status = 'Applied', notes = '') => {
-    const newApp = {
-      id: crypto.randomUUID(),
-      job_id: jobId,
-      status,
-      notes,
-      applied_date: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    }
-
-    // Optimistic update
-    setApplications(prev => {
-      const updated = [newApp, ...prev]
-      localStorage.setItem('applications', JSON.stringify(updated))
-      return updated
-    })
-
-    // Try to upsert to Supabase
+  // Update application status
+  const updateStatus = useCallback(async (appId, newStatus) => {
     try {
-      await supabase.from('applications').upsert(newApp)
-    } catch (err) {
-      console.warn('Could not save to Supabase:', err)
-    }
-
-    return newApp
-  }, [])
-
-  const moveApplication = useCallback(async (appId, newStatus) => {
-    setApplications(prev => {
-      const updated = prev.map(a =>
-        a.id === appId
-          ? { ...a, status: newStatus, updated_at: new Date().toISOString() }
-          : a
-      )
-      localStorage.setItem('applications', JSON.stringify(updated))
-      return updated
-    })
-
-    try {
-      await supabase
-        .from('applications')
+      const { error } = await supabase
+        .from('application_tracker')
         .update({ status: newStatus, updated_at: new Date().toISOString() })
         .eq('id', appId)
+
+      if (error) throw error
+      setApplications(prev =>
+        prev.map(app => app.id === appId ? { ...app, status: newStatus } : app)
+      )
     } catch (err) {
-      console.warn('Could not update in Supabase:', err)
+      console.error('Failed to update status:', err)
     }
   }, [])
 
-  const removeApplication = useCallback(async (appId) => {
-    setApplications(prev => {
-      const updated = prev.filter(a => a.id !== appId)
-      localStorage.setItem('applications', JSON.stringify(updated))
-      return updated
-    })
-
+  // Delete application
+  const deleteApplication = useCallback(async (appId) => {
     try {
-      await supabase.from('applications').delete().eq('id', appId)
+      const { error } = await supabase
+        .from('application_tracker')
+        .delete()
+        .eq('id', appId)
+
+      if (error) throw error
+      setApplications(prev => prev.filter(app => app.id !== appId))
     } catch (err) {
-      console.warn('Could not delete from Supabase:', err)
+      console.error('Failed to delete application:', err)
     }
   }, [])
+
+  // Group by status for Kanban view
+  const columns = COLUMNS.reduce((acc, status) => {
+    acc[status] = applications.filter(app => app.status === status)
+    return acc
+  }, {})
 
   return {
     applications,
@@ -109,8 +107,8 @@ export function useTracker() {
     columnNames: COLUMNS,
     loading,
     addApplication,
-    moveApplication,
-    removeApplication,
-    refetch: fetchApplications,
+    moveApplication: updateStatus,
+    removeApplication: deleteApplication,
+    COLUMNS,
   }
 }

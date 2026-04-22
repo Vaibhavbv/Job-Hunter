@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
@@ -15,10 +15,13 @@ export default function AuthPage() {
   const [success, setSuccess] = useState('')
 
   // Redirect if already logged in
-  if (user) {
-    navigate('/', { replace: true })
-    return null
-  }
+  useEffect(() => {
+    if (user) {
+      navigate('/', { replace: true })
+    }
+  }, [user, navigate])
+
+  if (user) return null
 
   const handleSubmit = async (e) => {
     e.preventDefault()

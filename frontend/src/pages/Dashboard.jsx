@@ -5,6 +5,7 @@ import AnimatedCounter from '../components/AnimatedCounter'
 import JobCard from '../components/JobCard'
 import { SkeletonGrid, SkeletonStat } from '../components/SkeletonLoader'
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts'
+import { hashColor, initials } from '../utils/format'
 
 // Stagger container + child variants for the page
 const container = {
@@ -212,12 +213,4 @@ function StatCard({ label, value, color, accent }) {
   )
 }
 
-/* ─── Helpers ───────────────────────────────────────── */
-function hashColor(str) {
-  let hash = 0
-  for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash)
-  return `hsl(${Math.abs(hash) % 360}, 55%, 45%)`
-}
-function initials(name) {
-  return name.split(/[\s&,]+/).filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join('')
-}
+// hashColor, initials imported from '../utils/format'

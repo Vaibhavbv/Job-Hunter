@@ -1,50 +1,52 @@
 import { createContext, useContext, useEffect, useState, useCallback } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from './useSupabase'
 
 const AuthContext = createContext(null)
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
-  const [profile, setProfile] = useState(null)
-  const [loading, setLoading] = useState(true)
-
-  // Fetch profile data
-  const fetchProfile = useCallback(async (userId) => {
-    try {
-      const { data } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single()
-      setProfile(data)
-    } catch (err) {
-      console.error('Failed to fetch profile:', err)
-    }
-  }, [])
+  const [loadingUser, setLoadingUser] = useState(true)
+  const queryClient = useQueryClient()
 
   useEffect(() => {
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null)
-      if (session?.user) fetchProfile(session.user.id)
-      setLoading(false)
+      setLoadingUser(false)
     })
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (_event, session) => {
         setUser(session?.user ?? null)
-        if (session?.user) {
-          fetchProfile(session.user.id)
-        } else {
-          setProfile(null)
+        setLoadingUser(false)
+        if (!session?.user) {
+          queryClient.removeQueries({ queryKey: ['profile'] })
         }
-        setLoading(false)
       }
     )
 
     return () => subscription.unsubscribe()
-  }, [fetchProfile])
+  }, [queryClient])
+
+  const { data: profile = null, isLoading: loadingProfile } = useQuery({
+    queryKey: ['profile', user?.id],
+    queryFn: async () => {
+      if (!user?.id) return null
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single()
+      if (error) throw error
+      return data
+    },
+    enabled: !!user?.id,
+    staleTime: 10 * 60 * 1000, 
+  })
+
+  const loading = loadingUser || (!!user && loadingProfile)
 
   const signUp = useCallback(async (email, password, fullName) => {
     const { data, error } = await supabase.auth.signUp({

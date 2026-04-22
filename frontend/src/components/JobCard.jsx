@@ -1,19 +1,6 @@
 import { useRef, useMemo } from 'react'
 import { motion, useMotionValue, useSpring, useTransform } from 'motion/react'
-
-// Generate a stable color from company name
-function hashColor(str) {
-  let hash = 0
-  for (let i = 0; i < str.length; i++) {
-    hash = str.charCodeAt(i) + ((hash << 5) - hash)
-  }
-  const h = Math.abs(hash) % 360
-  return `hsl(${h}, 55%, 45%)`
-}
-
-function initials(name) {
-  return name.split(/[\s&,]+/).filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join('')
-}
+import { hashColor, initials, formatDate, truncate } from '../utils/format'
 
 const platformColors = {
   LinkedIn: 'bg-linkedin/10 text-linkedin border-linkedin/20',
@@ -36,9 +23,13 @@ export default function JobCard({ job, onBookmark, isBookmarked, onClick, index 
   const rotateX = useSpring(useTransform(mouseY, [-0.5, 0.5], [8, -8]), { stiffness: 200, damping: 20 })
   const rotateY = useSpring(useTransform(mouseX, [-0.5, 0.5], [-8, 8]), { stiffness: 200, damping: 20 })
 
-  // Glossy light position
+  // Glossy light position — hoisted outside JSX to avoid creating new motion values on every render
   const lightX = useTransform(mouseX, [-0.5, 0.5], ['0%', '100%'])
   const lightY = useTransform(mouseY, [-0.5, 0.5], ['0%', '100%'])
+  const lightBackground = useTransform(
+    [lightX, lightY],
+    ([x, y]) => `radial-gradient(circle at ${x} ${y}, rgba(255,255,255,0.06) 0%, transparent 60%)`
+  )
 
   const handleMouseMove = (e) => {
     const rect = cardRef.current?.getBoundingClientRect()
@@ -56,8 +47,6 @@ export default function JobCard({ job, onBookmark, isBookmarked, onClick, index 
   const color = useMemo(() => hashColor(job.company || ''), [job.company])
   const letters = useMemo(() => initials(job.company || '?'), [job.company])
 
-  const truncate = (str, len) => str?.length > len ? str.slice(0, len) + '…' : str || ''
-
   return (
     <motion.div
       ref={cardRef}
@@ -74,12 +63,7 @@ export default function JobCard({ job, onBookmark, isBookmarked, onClick, index 
       {/* Glossy light reflection overlay */}
       <motion.div
         className="absolute inset-0 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-        style={{
-          background: useTransform(
-            [lightX, lightY],
-            ([x, y]) => `radial-gradient(circle at ${x} ${y}, rgba(255,255,255,0.06) 0%, transparent 60%)`
-          ),
-        }}
+        style={{ background: lightBackground }}
       />
 
       <div className="relative z-10">
@@ -155,16 +139,4 @@ export default function JobCard({ job, onBookmark, isBookmarked, onClick, index 
       </div>
     </motion.div>
   )
-}
-
-function formatDate(dateStr) {
-  if (!dateStr) return '—'
-  const d = new Date(dateStr + 'T00:00:00')
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  const diff = Math.round((today - d) / 86400000)
-  if (diff === 0) return 'Today'
-  if (diff === 1) return 'Yesterday'
-  if (diff < 7) return `${diff}d ago`
-  return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
 }

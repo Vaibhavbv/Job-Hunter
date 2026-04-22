@@ -3,14 +3,14 @@ import { motion, AnimatePresence } from 'motion/react'
 import { useNavigate } from 'react-router-dom'
 import { useSession } from '../hooks/useSession'
 import { useJobs } from '../hooks/useJobs'
+import * as api from '../services/api'
+import { hashColor } from '../utils/format'
 
 // We'll use the legacy build of pdfjs-dist for broadest compatibility
 import * as pdfjsLib from 'pdfjs-dist'
 
 // Point the worker to unpkg CDN (mirrors npm, always has latest versions)
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`
-
-const SUPABASE_FUNCTIONS_URL = 'https://qlvnnrmilwfxzlotduld.supabase.co/functions/v1'
 
 const STEPS = [
   { id: 'upload', label: 'Upload Resume', icon: '📄' },
@@ -130,8 +130,7 @@ export default function ResumeUpload() {
     setTailoring(true)
     setTailorError('')
     try {
-      const resumeBody = extractedText || resumeText
-      if (!resumeBody) throw new Error('No resume text available')
+      if (!sessionId) throw new Error('No active session. Please upload a resume first.')
 
       let jdText = ''
       let jobTitle = ''
@@ -150,33 +149,12 @@ export default function ResumeUpload() {
         company = job.company
       }
 
-      // Call the rewrite-resume edge function directly with the resume text and JD
-      const prompt = `Rewrite this resume to better match this job description. Keep all facts true, only reframe wording, reorder bullet points, and emphasize matching skills. Return the full rewritten resume as plain text.
-
-ORIGINAL RESUME:
-${resumeBody.slice(0, 8000)}
-
-JOB DESCRIPTION:
-Title: ${jobTitle}
-Company: ${company}
-Description:
-${jdText.slice(0, 4000)}`
-
-      // Always pass the extracted jdText to the rewrite edge function
-      // instead of job_id, because the backend looks for job_id in the ai_jobs table
-      // but selectedJobId here points to the global scraped 'jobs' table.
-      const resp = await fetch(`${SUPABASE_FUNCTIONS_URL}/rewrite-resume`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          session_id: sessionId,
-          custom_jd: jdText.slice(0, 4000),
-          custom_title: jobTitle,
-          custom_company: company,
-        }),
+      // Call the rewrite-resume edge function via the API service (with auth)
+      const data = await api.rewriteResume(sessionId, {
+        custom_jd: jdText.slice(0, 4000),
+        custom_title: jobTitle,
+        custom_company: company,
       })
-      const data = await resp.json()
-      if (!resp.ok) throw new Error(data.error || 'Failed to tailor resume')
       setTailoredResume(data.rewritten_resume)
     } catch (err) {
       setTailorError(err.message)
@@ -617,8 +595,4 @@ ${jdText.slice(0, 4000)}`
 }
 
 /* ─── Helpers ───────────────────────────────────────── */
-function hashColor(str) {
-  let hash = 0
-  for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash)
-  return `hsl(${Math.abs(hash) % 360}, 55%, 45%)`
-}
+// hashColor imported from '../utils/format'
