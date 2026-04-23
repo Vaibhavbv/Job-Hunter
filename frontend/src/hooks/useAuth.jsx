@@ -39,11 +39,36 @@ export function AuthProvider({ children }) {
         .select('*')
         .eq('id', user.id)
         .single()
-      if (error) throw error
+
+      if (error) {
+        // PGRST116 = "no rows found" — auto-create a profile row
+        if (error.code === 'PGRST116') {
+          const { data: newProfile, error: insertErr } = await supabase
+            .from('profiles')
+            .upsert({
+              id: user.id,
+              full_name: user.user_metadata?.full_name || user.email?.split('@')[0] || '',
+              skills: [],
+              preferred_roles: [],
+              preferred_locations: [],
+            })
+            .select('*')
+            .single()
+
+          if (insertErr) {
+            console.warn('Failed to auto-create profile:', insertErr)
+            return null // Don't block the app
+          }
+          return newProfile
+        }
+        console.warn('Profile fetch error:', error)
+        return null // Don't throw — just return null so app doesn't hang
+      }
       return data
     },
     enabled: !!user?.id,
-    staleTime: 10 * 60 * 1000, 
+    staleTime: 10 * 60 * 1000,
+    retry: 1, // Don't retry infinitely on errors
   })
 
   const loading = loadingUser || (!!user && loadingProfile)

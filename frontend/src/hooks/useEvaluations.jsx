@@ -36,10 +36,14 @@ export function useEvaluations() {
         `)
         .order('overall_score', { ascending: false })
 
-      if (err) throw err
+      if (err) {
+        console.warn('Evaluations query error:', err.message)
+        return [] // Don't throw — table may not exist yet
+      }
       return data || []
     },
-    staleTime: 2 * 60 * 1000, // 2 minutes
+    staleTime: 2 * 60 * 1000,
+    retry: 1,
   })
 
   // ---------------------------------------------------------------------------
