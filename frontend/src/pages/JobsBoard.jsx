@@ -3,8 +3,21 @@ import { motion, AnimatePresence } from 'motion/react'
 import { FixedSizeList as List } from 'react-window'
 import { useJobs } from '../hooks/useJobs'
 import { useAuth } from '../hooks/useAuth'
+import { useEvaluations } from '../hooks/useEvaluations'
 import AnimatedCounter from '../components/AnimatedCounter'
 import { hashColor, initials, formatDate, formatSalary } from '../utils/format'
+
+const GRADE_COLORS = {
+  'A+': '#00ff88', 'A': '#34d399', 'B+': '#60a5fa',
+  'B': '#818cf8', 'C': '#fbbf24', 'D': '#f97316', 'F': '#ef4444',
+}
+
+const GRADE_OPTIONS = [
+  { value: null, label: 'All Grades' },
+  { value: 'A+', label: 'A+' }, { value: 'A', label: 'A' },
+  { value: 'B+', label: 'B+' }, { value: 'B', label: 'B' },
+  { value: 'C', label: 'C' }, { value: 'D', label: 'D' }, { value: 'F', label: 'F' },
+]
 
 const SORT_OPTIONS = [
   { value: 'date', label: 'Latest' },
@@ -35,7 +48,9 @@ const PLATFORM_STYLES = {
 export default function JobsBoard() {
   const { jobs, allJobs, loading, filters, setFilters, filterOptions, stats } = useJobs()
   const { profile } = useAuth()
+  const { evaluations } = useEvaluations()
   const [selectedJob, setSelectedJob] = useState(null)
+  const [gradeFilter, setGradeFilter] = useState(null)
   const [showBookmarksOnly, setShowBookmarksOnly] = useState(false)
   const [bookmarks, setBookmarks] = useState(() => {
     const stored = localStorage.getItem('bookmarks')
@@ -60,11 +75,28 @@ export default function JobsBoard() {
     setShowBookmarksOnly(false)
   }, [setFilters])
 
-  // Filter for bookmarks view
+  // Build evaluation lookup map: job_id -> evaluation
+  const evalMap = useMemo(() => {
+    const map = new Map()
+    for (const e of evaluations) {
+      if (e.job_id) map.set(e.job_id, e)
+    }
+    return map
+  }, [evaluations])
+
+  // Filter for bookmarks + grade view
   const displayJobs = useMemo(() => {
-    if (!showBookmarksOnly) return jobs
-    return jobs.filter(j => bookmarks.includes(j.id || j.dedup_key))
-  }, [jobs, showBookmarksOnly, bookmarks])
+    let filtered = showBookmarksOnly
+      ? jobs.filter(j => bookmarks.includes(j.id || j.dedup_key))
+      : jobs
+    if (gradeFilter) {
+      filtered = filtered.filter(j => {
+        const ev = evalMap.get(j.id)
+        return ev && ev.grade === gradeFilter
+      })
+    }
+    return filtered
+  }, [jobs, showBookmarksOnly, bookmarks, gradeFilter, evalMap])
 
   // Active filter count
   const activeFilterCount = useMemo(() => {
@@ -306,6 +338,21 @@ export default function JobsBoard() {
             />
           ))}
         </FilterCategory>
+
+        {/* Grade Filter — only show if evaluations exist */}
+        {evaluations.length > 0 && (
+          <FilterCategory label="Grade">
+            {GRADE_OPTIONS.map(opt => (
+              <Chip
+                key={opt.label}
+                label={opt.label}
+                active={gradeFilter === opt.value}
+                onClick={() => setGradeFilter(opt.value)}
+                dotColor={opt.value ? GRADE_COLORS[opt.value] : undefined}
+              />
+            ))}
+          </FilterCategory>
+        )}
       </motion.div>
 
       {/* ─── DATA TABLE ─── */}
@@ -344,12 +391,13 @@ export default function JobsBoard() {
           transition={{ delay: 0.15 }}
         >
           {/* Table Header */}
-          <div className="grid grid-cols-[2fr_1.2fr_0.9fr_0.7fr_0.8fr_0.7fr_0.6fr_0.5fr] gap-3 px-5 py-3 border-b border-dark-border bg-dark-bg/50 text-[11px] font-mono text-dark-muted uppercase tracking-widest">
+          <div className="grid grid-cols-[2fr_1.2fr_0.9fr_0.7fr_0.8fr_0.5fr_0.6fr_0.6fr_0.5fr] gap-3 px-5 py-3 border-b border-dark-border bg-dark-bg/50 text-[11px] font-mono text-dark-muted uppercase tracking-widest">
             <span>Position</span>
             <span>Company</span>
             <span>Location</span>
             <span>Mode</span>
             <span>Salary</span>
+            <span>Grade</span>
             <span>Source</span>
             <span>Posted</span>
             <span className="text-center">Action</span>
@@ -373,6 +421,7 @@ export default function JobsBoard() {
                       onClick={setSelectedJob}
                       onBookmark={toggleBookmark}
                       isBookmarked={bookmarks.includes(job.id || job.dedup_key)}
+                      evaluation={evalMap.get(job.id)}
                     />
                   </div>
                 )
@@ -475,12 +524,12 @@ function WorkModeBadge({ mode }) {
 }
 
 /* ─── Table Row ─────────────────────────────────────── */
-function JobRow({ job, index, onClick, onBookmark, isBookmarked }) {
+function JobRow({ job, index, onClick, onBookmark, isBookmarked, evaluation }) {
   const platformStyle = PLATFORM_STYLES[job.platform] || {}
 
   return (
     <motion.div
-      className="job-row-card grid-cols-[2fr_1.2fr_0.9fr_0.7fr_0.8fr_0.7fr_0.6fr_0.5fr] group"
+      className="job-row-card grid-cols-[2fr_1.2fr_0.9fr_0.7fr_0.8fr_0.5fr_0.6fr_0.6fr_0.5fr] group"
       onClick={() => onClick(job)}
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
@@ -521,6 +570,25 @@ function JobRow({ job, index, onClick, onBookmark, isBookmarked }) {
       <span className={`text-sm truncate ${job.salary ? 'text-emerald-400 font-medium' : 'text-dark-muted/40'}`}>
         {job.salary ? formatSalary(job.salary) : 'Not listed'}
       </span>
+
+      {/* Grade */}
+      <div>
+        {evaluation ? (
+          <span
+            className="inline-flex items-center justify-center w-8 h-8 rounded-lg font-mono text-xs font-bold border"
+            style={{
+              borderColor: (GRADE_COLORS[evaluation.grade] || '#8b8da3') + '40',
+              backgroundColor: (GRADE_COLORS[evaluation.grade] || '#8b8da3') + '15',
+              color: GRADE_COLORS[evaluation.grade] || '#8b8da3',
+            }}
+            title={`Score: ${evaluation.overall_score} · ${evaluation.archetype}`}
+          >
+            {evaluation.grade}
+          </span>
+        ) : (
+          <span className="text-dark-muted/30 text-[11px] font-mono">—</span>
+        )}
+      </div>
 
       {/* Source */}
       <div>

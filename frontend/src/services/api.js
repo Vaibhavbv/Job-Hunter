@@ -44,6 +44,10 @@ async function callFunction(functionName, body = {}) {
   return data
 }
 
+// ---------------------------------------------------------------------------
+// Resume operations
+// ---------------------------------------------------------------------------
+
 /**
  * Parse a resume and get job titles.
  * @param {string} resumeText - Extracted resume text
@@ -52,6 +56,21 @@ async function callFunction(functionName, body = {}) {
 export async function parseResume(resumeText) {
   return callFunction('parse-resume', { resume_text: resumeText })
 }
+
+/**
+ * Rewrite/tailor a resume for a specific job.
+ * Now returns structured data including keywords and ATS score.
+ * @param {string} sessionId
+ * @param {{ job_id?: number, custom_jd?: string, custom_title?: string, custom_company?: string }} options
+ * @returns {{ rewritten_resume: string, resume_id: string, keywords_added: string[], ats_score: number, changes_summary: string }}
+ */
+export async function rewriteResume(sessionId, options = {}) {
+  return callFunction('rewrite-resume', { session_id: sessionId, ...options })
+}
+
+// ---------------------------------------------------------------------------
+// Job fetching
+// ---------------------------------------------------------------------------
 
 /**
  * Fetch jobs from LinkedIn via Apify for the given session.
@@ -63,8 +82,21 @@ export async function fetchJobs(sessionId, jobTitles) {
   return callFunction('fetch-jobs', { session_id: sessionId, job_titles: jobTitles })
 }
 
+// ---------------------------------------------------------------------------
+// Job evaluation (NEW — Phase 3)
+// ---------------------------------------------------------------------------
+
 /**
- * Score jobs against a resume using AI.
+ * Evaluate jobs using the 5-dimension scoring system.
+ * @param {{ job_ids?: number[], session_id?: string }} options
+ * @returns {{ evaluations: object[], new_count: number, message: string }}
+ */
+export async function evaluateJobs(options = {}) {
+  return callFunction('evaluate-jobs', options)
+}
+
+/**
+ * Score jobs against a resume using AI. (Legacy — kept for backward compat)
  * @param {string} sessionId
  * @returns {{ jobs: object[], message: string }}
  */
@@ -72,15 +104,9 @@ export async function scoreJobs(sessionId) {
   return callFunction('score-jobs', { session_id: sessionId })
 }
 
-/**
- * Rewrite/tailor a resume for a specific job.
- * @param {string} sessionId
- * @param {{ job_id?: number, custom_jd?: string, custom_title?: string, custom_company?: string }} options
- * @returns {{ rewritten_resume: string }}
- */
-export async function rewriteResume(sessionId, options = {}) {
-  return callFunction('rewrite-resume', { session_id: sessionId, ...options })
-}
+// ---------------------------------------------------------------------------
+// Credits
+// ---------------------------------------------------------------------------
 
 /**
  * Check Apify credit usage.

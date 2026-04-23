@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react'
-import { motion } from 'motion/react'
+import { useState, useEffect, useCallback } from 'react'
+import { motion, AnimatePresence } from 'motion/react'
 import { useTheme } from '../hooks/useTheme'
 import { useJobs } from '../hooks/useJobs'
 import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../hooks/useSupabase'
+import { useQueryClient } from '@tanstack/react-query'
 
 const item = {
   hidden: { opacity: 0, y: 20 },
@@ -13,10 +14,42 @@ const item = {
 export default function Settings() {
   const { theme, toggle } = useTheme()
   const { stats } = useJobs()
-  const { user } = useAuth()
+  const { user, profile } = useAuth()
+  const queryClient = useQueryClient()
   const [supabaseStatus] = useState('connected')
 
-  // User Filters State
+  // ─── Profile Form State ───
+  const [profileForm, setProfileForm] = useState({
+    headline: '',
+    bio: '',
+    skills: [],
+    preferred_roles: [],
+    preferred_locations: [],
+    min_salary: '',
+    experience_years: '',
+  })
+  const [skillInput, setSkillInput] = useState('')
+  const [roleInput, setRoleInput] = useState('')
+  const [locationInput, setLocationInput] = useState('')
+  const [savingProfile, setSavingProfile] = useState(false)
+  const [saveMessage, setSaveMessage] = useState('')
+
+  // Sync form with profile from DB
+  useEffect(() => {
+    if (profile) {
+      setProfileForm({
+        headline: profile.headline || '',
+        bio: profile.bio || '',
+        skills: Array.isArray(profile.skills) ? profile.skills : [],
+        preferred_roles: Array.isArray(profile.preferred_roles) ? profile.preferred_roles : [],
+        preferred_locations: Array.isArray(profile.preferred_locations) ? profile.preferred_locations : [],
+        min_salary: profile.min_salary || '',
+        experience_years: profile.experience_years || '',
+      })
+    }
+  }, [profile])
+
+  // ─── Scraping Filters State ───
   const [filters, setFilters] = useState([])
   const [newRole, setNewRole] = useState('')
   const [newLocation, setNewLocation] = useState('Remote')
@@ -34,6 +67,62 @@ export default function Settings() {
     }
   }, [user])
 
+  // ─── Profile Handlers ───
+  const updateField = useCallback((field, value) => {
+    setProfileForm(prev => ({ ...prev, [field]: value }))
+  }, [])
+
+  const addTag = useCallback((field, inputState, setInputState) => {
+    const trimmed = inputState.trim()
+    if (!trimmed) return
+    setProfileForm(prev => {
+      if (prev[field].includes(trimmed)) return prev
+      return { ...prev, [field]: [...prev[field], trimmed] }
+    })
+    setInputState('')
+  }, [])
+
+  const removeTag = useCallback((field, value) => {
+    setProfileForm(prev => ({
+      ...prev,
+      [field]: prev[field].filter(v => v !== value),
+    }))
+  }, [])
+
+  const handleSaveProfile = async () => {
+    if (!user) return
+    setSavingProfile(true)
+    setSaveMessage('')
+
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          headline: profileForm.headline || null,
+          bio: profileForm.bio || null,
+          skills: profileForm.skills,
+          preferred_roles: profileForm.preferred_roles,
+          preferred_locations: profileForm.preferred_locations,
+          min_salary: profileForm.min_salary ? Number(profileForm.min_salary) : null,
+          experience_years: profileForm.experience_years ? Number(profileForm.experience_years) : null,
+        })
+        .eq('id', user.id)
+
+      if (error) throw error
+
+      // Invalidate profile cache so useAuth re-fetches
+      queryClient.invalidateQueries({ queryKey: ['profile'] })
+      setSaveMessage('Profile saved successfully!')
+      setTimeout(() => setSaveMessage(''), 3000)
+    } catch (err) {
+      console.error('Failed to save profile:', err)
+      setSaveMessage('Failed to save profile. Please try again.')
+    } finally {
+      setSavingProfile(false)
+    }
+  }
+
+  // ─── Filter Handlers ───
   const handleAddFilter = async (e) => {
     e.preventDefault()
     if (!newRole.trim()) return
@@ -45,15 +134,14 @@ export default function Settings() {
         platform_preference: 'All',
         is_active: true
       }]).select()
-      
+
       if (error) throw error
       if (data) setFilters([data[0], ...filters])
-      
+
       setNewRole('')
       setNewLocation('Remote')
     } catch (err) {
       console.error('Failed to add filter:', err)
-      alert("Failed to add filter")
     }
   }
 
@@ -90,11 +178,262 @@ export default function Settings() {
           System <span className="text-accent">Config</span>
         </h1>
         <p className="text-dark-muted text-xs font-mono mt-1">
-          Terminal preferences and connection status
+          Profile, preferences, and connection status
         </p>
       </motion.div>
 
-      {/* Scraping Preferences */}
+      {/* ═══════════════════════════════════════════════════════════
+         PROFILE CONFIGURATION (Phase 7)
+         ═══════════════════════════════════════════════════════════ */}
+      <motion.div variants={item} className="bg-dark-card border border-dark-border rounded-2xl p-5 mb-4">
+        <div className="flex justify-between items-center mb-5">
+          <h3 className="font-mono text-xs text-dark-muted uppercase tracking-wider">
+            Candidate Profile
+          </h3>
+          {profile?.base_resume && (
+            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-accent/10 text-accent">
+              Resume Linked ✓
+            </span>
+          )}
+        </div>
+
+        <div className="space-y-5">
+          {/* Headline */}
+          <div>
+            <label className="text-xs font-mono text-dark-muted block mb-1.5">Headline</label>
+            <input
+              type="text"
+              value={profileForm.headline}
+              onChange={e => updateField('headline', e.target.value)}
+              placeholder="e.g. Senior Data Engineer | Python & Spark"
+              className="premium-input w-full rounded-xl text-sm"
+              id="profile-headline"
+            />
+          </div>
+
+          {/* Bio */}
+          <div>
+            <label className="text-xs font-mono text-dark-muted block mb-1.5">Bio / Summary</label>
+            <textarea
+              value={profileForm.bio}
+              onChange={e => updateField('bio', e.target.value)}
+              placeholder="Brief professional summary..."
+              className="premium-input w-full rounded-xl text-sm h-20 resize-none"
+              id="profile-bio"
+            />
+          </div>
+
+          {/* Experience + Salary Row */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="text-xs font-mono text-dark-muted block mb-1.5">Years of Experience</label>
+              <input
+                type="number"
+                value={profileForm.experience_years}
+                onChange={e => updateField('experience_years', e.target.value)}
+                placeholder="e.g. 5"
+                className="premium-input w-full rounded-xl text-sm"
+                min="0"
+                max="50"
+                id="profile-experience"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-mono text-dark-muted block mb-1.5">Min Salary (yearly)</label>
+              <input
+                type="number"
+                value={profileForm.min_salary}
+                onChange={e => updateField('min_salary', e.target.value)}
+                placeholder="e.g. 1200000"
+                className="premium-input w-full rounded-xl text-sm"
+                id="profile-salary"
+              />
+            </div>
+          </div>
+
+          {/* Skills Tag Input */}
+          <div>
+            <label className="text-xs font-mono text-dark-muted block mb-1.5">
+              Skills ({profileForm.skills.length})
+            </label>
+            <div className="flex gap-2 mb-2">
+              <input
+                type="text"
+                value={skillInput}
+                onChange={e => setSkillInput(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') { e.preventDefault(); addTag('skills', skillInput, setSkillInput) }
+                }}
+                placeholder="Add a skill and press Enter"
+                className="premium-input flex-1 rounded-xl text-sm"
+                id="profile-skills-input"
+              />
+              <button
+                onClick={() => addTag('skills', skillInput, setSkillInput)}
+                className="premium-btn px-3 py-2 rounded-xl text-sm"
+                type="button"
+              >
+                +
+              </button>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {profileForm.skills.map(skill => (
+                <span
+                  key={skill}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-accent/5 text-accent border border-accent/10 font-mono text-xs"
+                >
+                  {skill}
+                  <button
+                    onClick={() => removeTag('skills', skill)}
+                    className="text-accent/60 hover:text-accent ml-0.5"
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+            </div>
+          </div>
+
+          {/* Preferred Roles Tag Input */}
+          <div>
+            <label className="text-xs font-mono text-dark-muted block mb-1.5">
+              Target Roles ({profileForm.preferred_roles.length})
+            </label>
+            <div className="flex gap-2 mb-2">
+              <input
+                type="text"
+                value={roleInput}
+                onChange={e => setRoleInput(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') { e.preventDefault(); addTag('preferred_roles', roleInput, setRoleInput) }
+                }}
+                placeholder="e.g. Data Engineer, ML Engineer"
+                className="premium-input flex-1 rounded-xl text-sm"
+                id="profile-roles-input"
+              />
+              <button
+                onClick={() => addTag('preferred_roles', roleInput, setRoleInput)}
+                className="premium-btn px-3 py-2 rounded-xl text-sm"
+                type="button"
+              >
+                +
+              </button>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {profileForm.preferred_roles.map(role => (
+                <span
+                  key={role}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-500/5 text-blue-400 border border-blue-500/10 font-mono text-xs"
+                >
+                  {role}
+                  <button
+                    onClick={() => removeTag('preferred_roles', role)}
+                    className="text-blue-400/60 hover:text-blue-400 ml-0.5"
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+            </div>
+          </div>
+
+          {/* Preferred Locations Tag Input */}
+          <div>
+            <label className="text-xs font-mono text-dark-muted block mb-1.5">
+              Preferred Locations ({profileForm.preferred_locations.length})
+            </label>
+            <div className="flex gap-2 mb-2">
+              <input
+                type="text"
+                value={locationInput}
+                onChange={e => setLocationInput(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') { e.preventDefault(); addTag('preferred_locations', locationInput, setLocationInput) }
+                }}
+                placeholder="e.g. Bangalore, Remote, Mumbai"
+                className="premium-input flex-1 rounded-xl text-sm"
+                id="profile-locations-input"
+              />
+              <button
+                onClick={() => addTag('preferred_locations', locationInput, setLocationInput)}
+                className="premium-btn px-3 py-2 rounded-xl text-sm"
+                type="button"
+              >
+                +
+              </button>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {profileForm.preferred_locations.map(loc => (
+                <span
+                  key={loc}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-purple-500/5 text-purple-400 border border-purple-500/10 font-mono text-xs"
+                >
+                  📍 {loc}
+                  <button
+                    onClick={() => removeTag('preferred_locations', loc)}
+                    className="text-purple-400/60 hover:text-purple-400 ml-0.5"
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+            </div>
+          </div>
+
+          {/* Resume Status */}
+          <div className="bg-dark-bg rounded-xl p-4 border border-dark-border/50">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-mono text-dark-muted">Base Resume</p>
+                {profile?.base_resume ? (
+                  <p className="text-sm text-accent mt-1">
+                    ✓ {profile.base_resume.length.toLocaleString()} characters uploaded
+                  </p>
+                ) : (
+                  <p className="text-sm text-amber-400 mt-1">
+                    ⚠ No resume linked — upload one via AI Dashboard
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Save Profile */}
+          <div className="flex items-center gap-3">
+            <motion.button
+              onClick={handleSaveProfile}
+              disabled={savingProfile}
+              className="premium-btn px-6 py-2.5 rounded-xl text-sm disabled:opacity-50"
+              whileTap={{ scale: 0.95 }}
+            >
+              {savingProfile ? (
+                <span className="flex items-center gap-2">
+                  <span className="w-3 h-3 border-2 border-dark-bg/30 border-t-dark-bg rounded-full animate-spin" />
+                  Saving...
+                </span>
+              ) : (
+                'Save Profile'
+              )}
+            </motion.button>
+            <AnimatePresence>
+              {saveMessage && (
+                <motion.span
+                  className={`text-xs font-mono ${saveMessage.includes('success') ? 'text-accent' : 'text-red-400'}`}
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0 }}
+                >
+                  {saveMessage}
+                </motion.span>
+              )}
+            </AnimatePresence>
+          </div>
+        </div>
+      </motion.div>
+
+      {/* ═══════════════════════════════════════════════════════════
+         SCRAPING PREFERENCES
+         ═══════════════════════════════════════════════════════════ */}
       <motion.div variants={item} className="bg-dark-card border border-dark-border rounded-2xl p-5 mb-4">
         <div className="flex justify-between items-center mb-4">
           <h3 className="font-mono text-xs text-dark-muted uppercase tracking-wider">
@@ -102,7 +441,7 @@ export default function Settings() {
           </h3>
           <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-accent/10 text-accent">Active Webhook</span>
         </div>
-        
+
         <form onSubmit={handleAddFilter} className="flex gap-2 mb-4">
           <input
             type="text"
@@ -244,8 +583,8 @@ export default function Settings() {
           About
         </h3>
         <div className="space-y-2 text-[11px] font-mono text-dark-muted">
-           <p>Job Hunter v2.0 — Dark Ops Intelligence Terminal</p>
-           <p>Built with React + Vite + Tailwind + Framer Motion</p>
+           <p>Job Hunter v3.0 — AI-Powered SaaS Platform</p>
+           <p>Built with React + Vite + Tailwind + Framer Motion + Gemini AI</p>
            <p className="flex items-center gap-2">
              <a href="https://github.com/Vaibhavbv/Job-Hunter" target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">
                GitHub Repository

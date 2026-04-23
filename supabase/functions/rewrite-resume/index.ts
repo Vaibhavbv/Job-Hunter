@@ -7,6 +7,44 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
+function buildRewritePrompt(
+  resumeText: string,
+  jobTitle: string,
+  jobCompany: string,
+  jobDescription: string
+): string {
+  return `You are an expert resume writer and ATS optimization specialist.
+
+TASK: Rewrite the resume below to maximize its match with the target job description.
+
+RULES:
+1. Keep ALL facts truthful — do not invent experience, skills, or accomplishments
+2. Reframe bullet points to emphasize relevant skills and achievements
+3. Reorder sections to put the most relevant experience first
+4. Mirror keywords and phrases from the job description naturally
+5. Use strong action verbs and quantify achievements where possible
+6. Optimize for ATS (Applicant Tracking System) keyword matching
+7. Keep the resume concise — aim for the same length as the original
+
+ORIGINAL RESUME:
+${resumeText.slice(0, 8000)}
+
+TARGET JOB:
+Title: ${jobTitle}
+Company: ${jobCompany}
+${jobDescription ? `\nDescription:\n${jobDescription.slice(0, 4000)}` : ""}
+
+Return your response as a JSON object with these exact fields:
+{
+  "tailored_resume": "<the full rewritten resume as plain text>",
+  "keywords_added": ["keyword1", "keyword2", ...],
+  "ats_score": <estimated ATS match percentage 0-100>,
+  "changes_summary": "<brief summary of key changes made>"
+}
+
+Return ONLY the JSON object, no markdown fences, no extra text.`;
+}
+
 serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -74,52 +112,57 @@ serve(async (req: Request) => {
     let jobTitle = custom_title || "Target Role";
     let jobCompany = custom_company || "Target Company";
     let jobDescription = custom_jd || "";
+    let resolvedJobId: number | null = null;
 
-    // If job_id is provided, fetch from DB
+    // If job_id is provided, fetch from ai_jobs or jobs table
     if (job_id) {
-      const { data: job, error: jobError } = await supabase
+      // Try ai_jobs first (backward compat)
+      const { data: aiJob } = await supabase
         .from("ai_jobs")
         .select("*")
         .eq("id", job_id)
         .eq("session_id", session_id)
         .single();
 
-      if (jobError || !job) {
-        return new Response(
-          JSON.stringify({ error: "Job not found" }),
-          { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
+      if (aiJob) {
+        jobTitle = aiJob.title;
+        jobCompany = aiJob.company;
+        jobDescription = aiJob.jd_text || "";
+      } else {
+        // Try jobs table
+        const { data: job } = await supabase
+          .from("jobs")
+          .select("id, title, company, description")
+          .eq("id", job_id)
+          .single();
 
-      jobTitle = job.title;
-      jobCompany = job.company;
-      jobDescription = job.jd_text || "";
+        if (job) {
+          jobTitle = job.title;
+          jobCompany = job.company;
+          jobDescription = job.description || "";
+          resolvedJobId = job.id;
+        } else {
+          return new Response(
+            JSON.stringify({ error: "Job not found" }),
+            { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+      }
     }
 
-    // Call Gemini to rewrite resume
-    const prompt = `Rewrite this resume to better match this job description. Keep all facts true, only reframe wording, reorder bullet points, and emphasize matching skills. Return the full rewritten resume as plain text.
+    // Build prompt and call Gemini
+    const prompt = buildRewritePrompt(session.resume_text, jobTitle, jobCompany, jobDescription);
 
-ORIGINAL RESUME:
-${session.resume_text.slice(0, 8000)}
-
-JOB DESCRIPTION:
-Title: ${jobTitle}
-Company: ${jobCompany}
-${jobDescription ? `\nDescription:\n${jobDescription.slice(0, 4000)}` : ""}`;
-
-    const geminiResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        contents: [
-          {
-            parts: [{ text: prompt }],
-          },
-        ],
-      }),
-    });
+    const geminiResponse = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+        }),
+      }
+    );
 
     if (!geminiResponse.ok) {
       const errBody = await geminiResponse.text();
@@ -128,16 +171,61 @@ ${jobDescription ? `\nDescription:\n${jobDescription.slice(0, 4000)}` : ""}`;
     }
 
     const geminiData = await geminiResponse.json();
-    const rewrittenResume = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    const rawText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || "";
+
+    // Parse structured response
+    let tailoredResume = rawText;
+    let keywordsAdded: string[] = [];
+    let atsScore: number | null = null;
+    let changesSummary = "";
+
+    try {
+      const cleaned = rawText.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+      const parsed = JSON.parse(cleaned);
+      tailoredResume = parsed.tailored_resume || rawText;
+      keywordsAdded = Array.isArray(parsed.keywords_added) ? parsed.keywords_added : [];
+      atsScore = typeof parsed.ats_score === "number" ? Math.min(100, Math.max(0, parsed.ats_score)) : null;
+      changesSummary = parsed.changes_summary || "";
+    } catch {
+      // Gemini returned plain text — use as-is
+      console.warn("Gemini returned non-JSON response, using raw text");
+    }
+
+    // Save to resumes table
+    const { data: savedResume, error: saveError } = await supabase
+      .from("resumes")
+      .insert({
+        user_id: user.id,
+        job_id: resolvedJobId,
+        session_id,
+        original_text: session.resume_text.slice(0, 50000),
+        tailored_text: tailoredResume.slice(0, 50000),
+        keywords_added: keywordsAdded,
+        ats_score: atsScore,
+      })
+      .select("id, ats_score, keywords_added, version")
+      .single();
+
+    if (saveError) {
+      console.error("Failed to save tailored resume:", saveError);
+      // Don't fail the request — still return the resume
+    }
 
     return new Response(
-      JSON.stringify({ rewritten_resume: rewrittenResume }),
+      JSON.stringify({
+        rewritten_resume: tailoredResume,
+        resume_id: savedResume?.id || null,
+        keywords_added: keywordsAdded,
+        ats_score: atsScore,
+        changes_summary: changesSummary,
+        version: savedResume?.version || 1,
+      }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
     console.error("rewrite-resume error:", error);
     return new Response(
-      JSON.stringify({ error: error.message || "Internal server error" }),
+      JSON.stringify({ error: error instanceof Error ? error.message : "Internal server error" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

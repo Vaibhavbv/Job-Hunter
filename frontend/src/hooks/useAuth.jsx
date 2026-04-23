@@ -73,8 +73,8 @@ export function AuthProvider({ children }) {
     const { error } = await supabase.auth.signOut()
     if (error) throw error
     setUser(null)
-    setProfile(null)
-  }, [])
+    queryClient.removeQueries({ queryKey: ['profile'] })
+  }, [queryClient])
 
   return (
     <AuthContext.Provider value={{ user, profile, loading, signUp, signIn, signOut }}>

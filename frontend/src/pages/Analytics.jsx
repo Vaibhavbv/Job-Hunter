@@ -1,7 +1,8 @@
 import { useMemo } from 'react'
 import { motion } from 'motion/react'
 import { useJobs } from '../hooks/useJobs'
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, CartesianGrid } from 'recharts'
+import { useEvaluations } from '../hooks/useEvaluations'
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, CartesianGrid, Cell, PieChart, Pie } from 'recharts'
 
 const item = {
   hidden: { opacity: 0, y: 20 },
@@ -16,8 +17,16 @@ const chartTooltipStyle = {
   fontFamily: 'JetBrains Mono',
 }
 
+const GRADE_COLORS = {
+  'A+': '#00ff88', 'A': '#34d399', 'B+': '#60a5fa',
+  'B': '#818cf8', 'C': '#fbbf24', 'D': '#f97316', 'F': '#ef4444',
+}
+
 export default function Analytics() {
-  const { allJobs, loading } = useJobs()
+  const { allJobs, loading: jobsLoading } = useJobs()
+  const { evaluations, loading: evalsLoading, stats: evalStats } = useEvaluations()
+
+  const loading = jobsLoading || evalsLoading
 
   // Jobs over time (by posted_date)
   const timelineData = useMemo(() => {
@@ -29,8 +38,8 @@ export default function Analytics() {
     return Object.entries(byDate)
       .filter(([d]) => d !== 'unknown')
       .sort(([a], [b]) => a.localeCompare(b))
-      .slice(-30) // Last 30 days
-      .map(([date, count]) => ({ date: date.slice(5), count })) // MM-DD format
+      .slice(-30)
+      .map(([date, count]) => ({ date: date.slice(5), count }))
   }, [allJobs])
 
   // Top companies
@@ -59,15 +68,73 @@ export default function Analytics() {
       .map(([name, count]) => ({ name, count }))
   }, [allJobs])
 
-  // Activity heatmap (like GitHub contribution grid)
+  // Score distribution histogram (buckets of 10)
+  const scoreDistribution = useMemo(() => {
+    const buckets = Array.from({ length: 10 }, (_, i) => ({
+      range: `${i * 10}-${i * 10 + 9}`,
+      count: 0,
+      mid: i * 10 + 5,
+    }))
+    evaluations.forEach(e => {
+      if (e.overall_score != null) {
+        const idx = Math.min(Math.floor(e.overall_score / 10), 9)
+        buckets[idx].count++
+      }
+    })
+    return buckets.map(b => ({
+      ...b,
+      fill: b.mid >= 70 ? '#00ff88' : b.mid >= 50 ? '#60a5fa' : b.mid >= 30 ? '#fbbf24' : '#ef4444',
+    }))
+  }, [evaluations])
+
+  // Application funnel
+  const funnelData = useMemo(() => {
+    const total = allJobs.length
+    const evaluated = evaluations.length
+    const passed = evaluations.filter(e => !e.gate_fail).length
+    const applyNow = evaluations.filter(e => e.recommendation === 'Apply Now').length
+    const worthTrying = evaluations.filter(e => e.recommendation === 'Worth Trying').length
+
+    return [
+      { stage: 'Scraped', count: total, fill: '#8b8da3' },
+      { stage: 'Evaluated', count: evaluated, fill: '#818cf8' },
+      { stage: 'Passed Gate', count: passed, fill: '#60a5fa' },
+      { stage: 'Worth Trying', count: worthTrying + applyNow, fill: '#34d399' },
+      { stage: 'Apply Now', count: applyNow, fill: '#00ff88' },
+    ]
+  }, [allJobs, evaluations])
+
+  // Dimension averages comparison
+  const dimensionComparison = useMemo(() => {
+    if (evaluations.length === 0) return []
+    const dims = [
+      { key: 'technical_fit', label: 'Technical' },
+      { key: 'seniority_fit', label: 'Seniority' },
+      { key: 'domain_fit', label: 'Domain' },
+      { key: 'salary_fit', label: 'Salary' },
+      { key: 'location_fit', label: 'Location' },
+    ]
+    const topEvals = evaluations.filter(e => e.recommendation === 'Apply Now')
+    const allEvals = evaluations
+
+    return dims.map(d => {
+      const allScores = allEvals.map(e => e[d.key]).filter(Boolean)
+      const topScores = topEvals.map(e => e[d.key]).filter(Boolean)
+      return {
+        dimension: d.label,
+        'All Jobs': allScores.length > 0 ? Math.round(allScores.reduce((a, b) => a + b, 0) / allScores.length) : 0,
+        'Top Matches': topScores.length > 0 ? Math.round(topScores.reduce((a, b) => a + b, 0) / topScores.length) : 0,
+      }
+    })
+  }, [evaluations])
+
+  // Activity heatmap
   const heatmapData = useMemo(() => {
     const byDate = {}
     allJobs.forEach(j => {
       const d = j.posted_date
       if (d) byDate[d] = (byDate[d] || 0) + 1
     })
-
-    // Generate last 90 days
     const days = []
     for (let i = 89; i >= 0; i--) {
       const d = new Date()
@@ -105,9 +172,86 @@ export default function Analytics() {
           Analytics <span className="text-accent">Console</span>
         </h1>
         <p className="text-dark-muted text-xs font-mono mt-1">
-          {allJobs.length} data points · 90-day window
+          {allJobs.length} jobs scraped · {evaluations.length} evaluated · 90-day window
         </p>
       </motion.div>
+
+      {/* ─── APPLICATION FUNNEL ─── */}
+      {evaluations.length > 0 && (
+        <motion.div variants={item} className="bg-dark-card border border-dark-border rounded-2xl p-5 mb-6">
+          <h3 className="font-mono text-xs text-dark-muted uppercase tracking-wider mb-4">
+            Job Pipeline Funnel
+          </h3>
+          <div className="h-56">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={funnelData} layout="vertical">
+                <XAxis type="number" tick={{ fontSize: 10, fill: '#8b8da3' }} />
+                <YAxis dataKey="stage" type="category" tick={{ fontSize: 11, fill: '#8b8da3', fontFamily: 'JetBrains Mono' }} width={100} />
+                <Tooltip contentStyle={chartTooltipStyle} />
+                <Bar dataKey="count" radius={[0, 8, 8, 0]} animationDuration={1000}>
+                  {funnelData.map((entry, i) => (
+                    <Cell key={i} fill={entry.fill} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </motion.div>
+      )}
+
+      {/* ─── SCORE DISTRIBUTION + DIMENSION COMPARISON ─── */}
+      {evaluations.length > 0 && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+          {/* Score Distribution */}
+          <motion.div variants={item} className="bg-dark-card border border-dark-border rounded-2xl p-5">
+            <h3 className="font-mono text-xs text-dark-muted uppercase tracking-wider mb-4">
+              Score Distribution
+            </h3>
+            <div className="h-56">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={scoreDistribution}>
+                  <XAxis dataKey="range" tick={{ fontSize: 9, fill: '#8b8da3' }} />
+                  <YAxis tick={{ fontSize: 10, fill: '#8b8da3' }} allowDecimals={false} />
+                  <Tooltip contentStyle={chartTooltipStyle} />
+                  <Bar dataKey="count" radius={[6, 6, 0, 0]} animationDuration={800}>
+                    {scoreDistribution.map((entry, i) => (
+                      <Cell key={i} fill={entry.fill} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </motion.div>
+
+          {/* Dimension Comparison: All vs Top */}
+          <motion.div variants={item} className="bg-dark-card border border-dark-border rounded-2xl p-5">
+            <h3 className="font-mono text-xs text-dark-muted uppercase tracking-wider mb-4">
+              Dimension Scores · All vs Top Matches
+            </h3>
+            <div className="h-56">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={dimensionComparison}>
+                  <XAxis dataKey="dimension" tick={{ fontSize: 10, fill: '#8b8da3' }} />
+                  <YAxis tick={{ fontSize: 10, fill: '#8b8da3' }} domain={[0, 100]} />
+                  <Tooltip contentStyle={chartTooltipStyle} />
+                  <Bar dataKey="All Jobs" fill="#818cf8" radius={[4, 4, 0, 0]} opacity={0.5} />
+                  <Bar dataKey="Top Matches" fill="#00ff88" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="flex justify-center gap-4 mt-2">
+              <div className="flex items-center gap-1.5">
+                <div className="w-3 h-2 rounded-sm bg-[#818cf8] opacity-50" />
+                <span className="text-[10px] font-mono text-dark-muted">All Jobs</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <div className="w-3 h-2 rounded-sm bg-[#00ff88]" />
+                <span className="text-[10px] font-mono text-dark-muted">Top Matches</span>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      )}
 
       {/* Activity Heatmap */}
       <motion.div
@@ -132,12 +276,11 @@ export default function Analytics() {
                 title={`${d.date}: ${d.count} jobs`}
                 initial={{ opacity: 0, scale: 0 }}
                 animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: i * 0.005 }}
+                transition={{ delay: Math.min(i * 0.003, 0.3) }}
               />
             )
           })}
         </div>
-        {/* Legend */}
         <div className="flex items-center gap-1 mt-3 text-[9px] font-mono text-dark-muted">
           <span>Less</span>
           {[0, 0.25, 0.5, 0.75, 1].map(v => (
@@ -154,10 +297,7 @@ export default function Analytics() {
       {/* Charts Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
         {/* Jobs Over Time */}
-        <motion.div
-          variants={item}
-          className="bg-dark-card border border-dark-border rounded-2xl p-5"
-        >
+        <motion.div variants={item} className="bg-dark-card border border-dark-border rounded-2xl p-5">
           <h3 className="font-mono text-xs text-dark-muted uppercase tracking-wider mb-4">
             Jobs Scraped Over Time
           </h3>
@@ -182,10 +322,7 @@ export default function Analytics() {
         </motion.div>
 
         {/* Top Companies */}
-        <motion.div
-          variants={item}
-          className="bg-dark-card border border-dark-border rounded-2xl p-5"
-        >
+        <motion.div variants={item} className="bg-dark-card border border-dark-border rounded-2xl p-5">
           <h3 className="font-mono text-xs text-dark-muted uppercase tracking-wider mb-4">
             Top Companies
           </h3>
@@ -203,10 +340,7 @@ export default function Analytics() {
       </div>
 
       {/* Top Roles */}
-      <motion.div
-        variants={item}
-        className="bg-dark-card border border-dark-border rounded-2xl p-5"
-      >
+      <motion.div variants={item} className="bg-dark-card border border-dark-border rounded-2xl p-5">
         <h3 className="font-mono text-xs text-dark-muted uppercase tracking-wider mb-4">
           Top Roles
         </h3>
