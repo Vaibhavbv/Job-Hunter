@@ -12,7 +12,10 @@ import * as pdfjsLib from 'pdfjs-dist'
 // Point the worker to unpkg CDN (mirrors npm, always has latest versions)
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`
 
-const STEPS = [
+type Step = 'upload' | 'analyze' | 'tailor'
+type TailorMode = 'paste' | 'select' | null
+
+const STEPS: { id: Step; label: string; icon: string }[] = [
   { id: 'upload', label: 'Upload Resume', icon: '📄' },
   { id: 'analyze', label: 'AI Analysis', icon: '🤖' },
   { id: 'tailor', label: 'Tailor Resume', icon: '✨' },
@@ -22,7 +25,7 @@ export default function ResumeUpload() {
   const navigate = useNavigate()
   const { parseResume, loading, step, error, sessionId, jobTitles } = useSession()
   const { allJobs } = useJobs()
-  const fileInputRef = useRef(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [drag, setDrag] = useState(false)
   const [fileName, setFileName] = useState('')
@@ -31,10 +34,10 @@ export default function ResumeUpload() {
   const [parsed, setParsed] = useState(false)
 
   // Tailoring state
-  const [currentStep, setCurrentStep] = useState('upload')
-  const [tailorMode, setTailorMode] = useState(null) // 'paste' | 'select' | null
+  const [currentStep, setCurrentStep] = useState<Step>('upload')
+  const [tailorMode, setTailorMode] = useState<TailorMode>(null)
   const [pastedJD, setPastedJD] = useState('')
-  const [selectedJobId, setSelectedJobId] = useState(null)
+  const [selectedJobId, setSelectedJobId] = useState<number | null>(null)
   const [jobSearch, setJobSearch] = useState('')
   const [tailoredResume, setTailoredResume] = useState('')
   const [tailoring, setTailoring] = useState(false)
@@ -44,14 +47,13 @@ export default function ResumeUpload() {
   const filteredScrapedJobs = useMemo(() => {
     if (!jobSearch) return allJobs.slice(0, 20)
     const q = jobSearch.toLowerCase()
-    return allJobs.filter(j =>
-      (j.title || '').toLowerCase().includes(q) ||
-      (j.company || '').toLowerCase().includes(q)
-    ).slice(0, 20)
+    return allJobs
+      .filter((j) => (j.title || '').toLowerCase().includes(q) || (j.company || '').toLowerCase().includes(q))
+      .slice(0, 20)
   }, [allJobs, jobSearch])
 
   // Extract text from PDF file using pdfjs-dist
-  const extractTextFromPDF = useCallback(async (file) => {
+  const extractTextFromPDF = useCallback(async (file: File) => {
     setExtracting(true)
     setFileName(file.name)
     try {
@@ -62,7 +64,7 @@ export default function ResumeUpload() {
       for (let i = 1; i <= pdf.numPages; i++) {
         const page = await pdf.getPage(i)
         const content = await page.getTextContent()
-        const pageText = content.items.map((item) => item.str).join(' ')
+        const pageText = content.items.map((item) => ('str' in item ? item.str : '')).join(' ')
         fullText += pageText + '\n\n'
       }
 
@@ -76,52 +78,61 @@ export default function ResumeUpload() {
     }
   }, [])
 
-  const handleFile = useCallback(async (file) => {
-    if (!file) return
-    if (file.type !== 'application/pdf') {
-      alert('Please upload a PDF file')
-      return
-    }
-    if (file.size > 10 * 1024 * 1024) {
-      alert('File too large. Maximum size is 10MB.')
-      return
-    }
-
-    try {
-      const text = await extractTextFromPDF(file)
-      if (text.length < 50) {
-        alert('Could not extract enough text from this PDF. Please try a different resume.')
+  const handleFile = useCallback(
+    async (file: File | null | undefined) => {
+      if (!file) return
+      if (file.type !== 'application/pdf') {
+        alert('Please upload a PDF file')
+        return
+      }
+      if (file.size > 10 * 1024 * 1024) {
+        alert('File too large. Maximum size is 10MB.')
         return
       }
 
-      // Call parse-resume edge function
-      setCurrentStep('analyze')
-      await parseResume(text)
-      setParsed(true)
-      setCurrentStep('tailor')
-    } catch (err) {
-      console.error('Upload error:', err)
-    }
-  }, [extractTextFromPDF, parseResume])
+      try {
+        const text = await extractTextFromPDF(file)
+        if (text.length < 50) {
+          alert('Could not extract enough text from this PDF. Please try a different resume.')
+          return
+        }
 
-  const handleDrop = useCallback((e) => {
-    e.preventDefault()
-    setDrag(false)
-    const file = e.dataTransfer?.files?.[0]
-    handleFile(file)
-  }, [handleFile])
+        // Call parse-resume edge function
+        setCurrentStep('analyze')
+        await parseResume(text)
+        setParsed(true)
+        setCurrentStep('tailor')
+      } catch (err) {
+        console.error('Upload error:', err)
+      }
+    },
+    [extractTextFromPDF, parseResume],
+  )
 
-  const handleDragOver = useCallback((e) => {
+  const handleDrop = useCallback(
+    (e: React.DragEvent<HTMLDivElement>) => {
+      e.preventDefault()
+      setDrag(false)
+      const file = e.dataTransfer?.files?.[0]
+      handleFile(file)
+    },
+    [handleFile],
+  )
+
+  const handleDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault()
     setDrag(true)
   }, [])
 
   const handleDragLeave = useCallback(() => setDrag(false), [])
 
-  const handleInputChange = useCallback((e) => {
-    const file = e.target.files?.[0]
-    handleFile(file)
-  }, [handleFile])
+  const handleInputChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0]
+      handleFile(file)
+    },
+    [handleFile],
+  )
 
   const goToDashboard = () => navigate('/ai-dashboard')
 
@@ -142,7 +153,7 @@ export default function ResumeUpload() {
         jobTitle = 'Target Role'
         company = 'Target Company'
       } else if (tailorMode === 'select') {
-        const job = allJobs.find(j => j.id === selectedJobId)
+        const job = allJobs.find((j) => j.id === selectedJobId)
         if (!job) throw new Error('Please select a job')
         jdText = job.description || `${job.title} at ${job.company}`
         jobTitle = job.title
@@ -157,7 +168,7 @@ export default function ResumeUpload() {
       })
       setTailoredResume(data.rewritten_resume)
     } catch (err) {
-      setTailorError(err.message)
+      setTailorError(err instanceof Error ? err.message : String(err))
     } finally {
       setTailoring(false)
     }
@@ -176,17 +187,9 @@ export default function ResumeUpload() {
   }
 
   return (
-    <motion.div
-      className="max-w-3xl mx-auto px-4 sm:px-6 pb-12"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-    >
+    <motion.div className="max-w-3xl mx-auto px-4 sm:px-6 pb-12" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
       {/* Header */}
-      <motion.div
-        className="text-center py-8"
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-      >
+      <motion.div className="text-center py-8" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
         <h1 className="font-display font-bold text-3xl tracking-tight">
           Resume <span className="gradient-text">Studio</span>
         </h1>
@@ -204,7 +207,7 @@ export default function ResumeUpload() {
       >
         {STEPS.map((s, i) => {
           const isActive = s.id === currentStep
-          const isComplete = STEPS.findIndex(x => x.id === currentStep) > i
+          const isComplete = STEPS.findIndex((x) => x.id === currentStep) > i
           return (
             <div key={s.id} className="flex items-center gap-2">
               <motion.div
@@ -221,20 +224,14 @@ export default function ResumeUpload() {
                 <span>{isComplete ? '✓' : s.icon}</span>
                 <span className="hidden sm:block">{s.label}</span>
               </motion.div>
-              {i < STEPS.length - 1 && (
-                <div className={`w-8 h-px ${isComplete ? 'bg-accent/40' : 'bg-dark-border'}`} />
-              )}
+              {i < STEPS.length - 1 && <div className={`w-8 h-px ${isComplete ? 'bg-accent/40' : 'bg-dark-border'}`} />}
             </div>
           )
         })}
       </motion.div>
 
       {/* Upload Zone */}
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.15 }}
-      >
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
         <motion.div
           className={`relative border-2 border-dashed rounded-2xl p-12 text-center cursor-pointer transition-all duration-300 ${
             drag
@@ -303,15 +300,9 @@ export default function ResumeUpload() {
             </div>
           ) : (
             <>
-              <div className="text-4xl mb-3 opacity-40">
-                {drag ? '📥' : '📤'}
-              </div>
-              <p className="text-white font-display font-bold text-lg">
-                {fileName ? fileName : 'Drop your resume here'}
-              </p>
-              <p className="text-dark-muted text-xs font-mono mt-2">
-                or click to browse · PDF only · max 10MB
-              </p>
+              <div className="text-4xl mb-3 opacity-40">{drag ? '📥' : '📤'}</div>
+              <p className="text-white font-display font-bold text-lg">{fileName ? fileName : 'Drop your resume here'}</p>
+              <p className="text-dark-muted text-xs font-mono mt-2">or click to browse · PDF only · max 10MB</p>
             </>
           )}
         </motion.div>
@@ -385,32 +376,24 @@ export default function ResumeUpload() {
                   <motion.button
                     onClick={() => setTailorMode('paste')}
                     className={`p-4 rounded-xl border text-left transition-all ${
-                      tailorMode === 'paste'
-                        ? 'bg-accent/5 border-accent/30 text-accent'
-                        : 'border-dark-border hover:border-accent/20'
+                      tailorMode === 'paste' ? 'bg-accent/5 border-accent/30 text-accent' : 'border-dark-border hover:border-accent/20'
                     }`}
                     whileTap={{ scale: 0.98 }}
                   >
                     <div className="text-xl mb-2">📋</div>
                     <p className="font-display font-bold text-sm">Paste JD</p>
-                    <p className="text-[11px] font-mono text-dark-muted mt-1">
-                      Paste a job description manually
-                    </p>
+                    <p className="text-[11px] font-mono text-dark-muted mt-1">Paste a job description manually</p>
                   </motion.button>
                   <motion.button
                     onClick={() => setTailorMode('select')}
                     className={`p-4 rounded-xl border text-left transition-all ${
-                      tailorMode === 'select'
-                        ? 'bg-accent/5 border-accent/30 text-accent'
-                        : 'border-dark-border hover:border-accent/20'
+                      tailorMode === 'select' ? 'bg-accent/5 border-accent/30 text-accent' : 'border-dark-border hover:border-accent/20'
                     }`}
                     whileTap={{ scale: 0.98 }}
                   >
                     <div className="text-xl mb-2">🔍</div>
                     <p className="font-display font-bold text-sm">Select from Jobs</p>
-                    <p className="text-[11px] font-mono text-dark-muted mt-1">
-                      Pick from {allJobs.length} scraped jobs
-                    </p>
+                    <p className="text-[11px] font-mono text-dark-muted mt-1">Pick from {allJobs.length} scraped jobs</p>
                   </motion.button>
                 </div>
               )}
@@ -426,7 +409,7 @@ export default function ResumeUpload() {
                   >
                     <textarea
                       value={pastedJD}
-                      onChange={e => setPastedJD(e.target.value)}
+                      onChange={(e) => setPastedJD(e.target.value)}
                       placeholder="Paste the job description here..."
                       className="premium-input w-full h-40 rounded-xl resize-none"
                       id="paste-jd-textarea"
@@ -446,7 +429,9 @@ export default function ResumeUpload() {
                           />
                           Tailoring...
                         </span>
-                      ) : '✦ Tailor My Resume'}
+                      ) : (
+                        '✦ Tailor My Resume'
+                      )}
                     </motion.button>
                   </motion.div>
                 )}
@@ -464,20 +449,18 @@ export default function ResumeUpload() {
                     <input
                       type="text"
                       value={jobSearch}
-                      onChange={e => setJobSearch(e.target.value)}
+                      onChange={(e) => setJobSearch(e.target.value)}
                       placeholder="Search jobs by title or company..."
                       className="premium-input w-full rounded-xl"
                       id="job-search-input"
                     />
                     <div className="max-h-48 overflow-y-auto space-y-1 pr-1">
-                      {filteredScrapedJobs.map(job => (
+                      {filteredScrapedJobs.map((job) => (
                         <motion.button
                           key={job.id}
                           onClick={() => setSelectedJobId(job.id)}
                           className={`w-full text-left px-3 py-2.5 rounded-xl transition-all flex items-center gap-3 ${
-                            selectedJobId === job.id
-                              ? 'bg-accent/10 border border-accent/20'
-                              : 'hover:bg-dark-hover border border-transparent'
+                            selectedJobId === job.id ? 'bg-accent/10 border border-accent/20' : 'hover:bg-dark-hover border border-transparent'
                           }`}
                           whileTap={{ scale: 0.98 }}
                         >
@@ -489,11 +472,11 @@ export default function ResumeUpload() {
                           </div>
                           <div className="min-w-0">
                             <p className="text-sm font-medium truncate">{job.title}</p>
-                            <p className="text-[10px] text-dark-muted truncate">{job.company} · {job.platform}</p>
+                            <p className="text-[10px] text-dark-muted truncate">
+                              {job.company} · {job.platform}
+                            </p>
                           </div>
-                          {selectedJobId === job.id && (
-                            <span className="text-accent text-xs ml-auto shrink-0">✓</span>
-                          )}
+                          {selectedJobId === job.id && <span className="text-accent text-xs ml-auto shrink-0">✓</span>}
                         </motion.button>
                       ))}
                     </div>
@@ -512,7 +495,9 @@ export default function ResumeUpload() {
                           />
                           Tailoring...
                         </span>
-                      ) : '✦ Tailor My Resume'}
+                      ) : (
+                        '✦ Tailor My Resume'
+                      )}
                     </motion.button>
                   </motion.div>
                 )}
@@ -528,18 +513,15 @@ export default function ResumeUpload() {
               {/* Tailored Resume Result */}
               <AnimatePresence>
                 {tailoredResume && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="mt-4 space-y-3"
-                  >
+                  <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-4 space-y-3">
                     <div className="flex items-center justify-between">
-                      <h4 className="font-mono text-xs text-accent uppercase tracking-wider font-bold">
-                        Tailored Resume
-                      </h4>
+                      <h4 className="font-mono text-xs text-accent uppercase tracking-wider font-bold">Tailored Resume</h4>
                       <div className="flex items-center gap-2">
                         <motion.button
-                          onClick={() => { setTailoredResume(''); setTailorMode(null) }}
+                          onClick={() => {
+                            setTailoredResume('')
+                            setTailorMode(null)
+                          }}
                           className="px-3 py-1.5 rounded-lg text-xs font-mono text-dark-muted border border-dark-border hover:text-white transition-colors"
                           whileTap={{ scale: 0.95 }}
                         >
@@ -556,7 +538,7 @@ export default function ResumeUpload() {
                     </div>
                     <textarea
                       value={tailoredResume}
-                      onChange={e => setTailoredResume(e.target.value)}
+                      onChange={(e) => setTailoredResume(e.target.value)}
                       className="premium-input w-full h-[400px] rounded-xl resize-none text-sm leading-relaxed"
                     />
                   </motion.div>
@@ -593,6 +575,3 @@ export default function ResumeUpload() {
     </motion.div>
   )
 }
-
-/* ─── Helpers ───────────────────────────────────────── */
-// hashColor imported from '../utils/format'
