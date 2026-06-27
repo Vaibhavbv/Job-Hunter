@@ -10,6 +10,17 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: false,
+    rollupOptions: {
+      output: {
+        // Split stable, rarely-changing vendor code out of the main entry
+        // chunk so browsers can cache it across app deploys.
+        manualChunks: {
+          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+          'data-vendor': ['@supabase/supabase-js', '@tanstack/react-query'],
+          'motion-vendor': ['motion'],
+        },
+      },
+    },
   },
   test: {
     environment: 'jsdom',

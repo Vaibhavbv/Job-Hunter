@@ -6,11 +6,20 @@ import { useJobs } from '../hooks/useJobs'
 import * as api from '../services/api'
 import { hashColor } from '../utils/format'
 
-// We'll use the legacy build of pdfjs-dist for broadest compatibility
-import * as pdfjsLib from 'pdfjs-dist'
-
-// Point the worker to unpkg CDN (mirrors npm, always has latest versions)
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`
+// pdfjs-dist is ~450kB minified — load it on demand the first time a file is
+// actually picked, instead of bundling it into this route's initial chunk.
+let pdfjsPromise: ReturnType<typeof importPdfjs> | null = null
+function importPdfjs() {
+  return import('pdfjs-dist').then((pdfjsLib) => {
+    // Point the worker to unpkg CDN (mirrors npm, always has latest versions)
+    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`
+    return pdfjsLib
+  })
+}
+function loadPdfjs() {
+  if (!pdfjsPromise) pdfjsPromise = importPdfjs()
+  return pdfjsPromise
+}
 
 type Step = 'upload' | 'analyze' | 'tailor'
 type TailorMode = 'paste' | 'select' | null
@@ -58,6 +67,7 @@ export default function ResumeUpload() {
     setFileName(file.name)
     try {
       const arrayBuffer = await file.arrayBuffer()
+      const pdfjsLib = await loadPdfjs()
       const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise
       let fullText = ''
 
