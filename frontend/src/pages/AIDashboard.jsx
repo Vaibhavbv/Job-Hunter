@@ -42,7 +42,7 @@ const RECOMMENDATION_TABS = [
 
 export default function AIDashboard() {
   const navigate = useNavigate()
-  const { sessionId, jobTitles, loading: sessionLoading, step, error: sessionError, clearSession } = useSession()
+  const { sessionId, jobTitles, error: sessionError, clearSession } = useSession()
   const { evaluations, loading: evalsLoading, evaluating, stats, evaluate, progress, pendingCount } = useEvaluations()
 
   const [selectedEval, setSelectedEval] = useState(null)

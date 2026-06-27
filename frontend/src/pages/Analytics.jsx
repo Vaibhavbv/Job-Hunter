@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { motion } from 'motion/react'
 import { useJobs } from '../hooks/useJobs'
 import { useEvaluations } from '../hooks/useEvaluations'
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, CartesianGrid, Cell, PieChart, Pie } from 'recharts'
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, CartesianGrid, Cell } from 'recharts'
 
 const item = {
   hidden: { opacity: 0, y: 20 },
@@ -17,14 +17,9 @@ const chartTooltipStyle = {
   fontFamily: 'JetBrains Mono',
 }
 
-const GRADE_COLORS = {
-  'A+': '#00ff88', 'A': '#34d399', 'B+': '#60a5fa',
-  'B': '#818cf8', 'C': '#fbbf24', 'D': '#f97316', 'F': '#ef4444',
-}
-
 export default function Analytics() {
   const { allJobs, loading: jobsLoading } = useJobs()
-  const { evaluations, loading: evalsLoading, stats: evalStats } = useEvaluations()
+  const { evaluations, loading: evalsLoading } = useEvaluations()
 
   const loading = jobsLoading || evalsLoading
 

@@ -3,7 +3,7 @@ import { motion } from 'motion/react'
 import { useJobs } from '../hooks/useJobs'
 import { useEvaluations } from '../hooks/useEvaluations'
 import AnimatedCounter from '../components/AnimatedCounter'
-import { SkeletonGrid, SkeletonStat } from '../components/SkeletonLoader'
+import { SkeletonStat } from '../components/SkeletonLoader'
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, RadarChart, PolarGrid, PolarAngleAxis, Radar, BarChart, Bar, XAxis, YAxis } from 'recharts'
 import { hashColor, initials } from '../utils/format'
 

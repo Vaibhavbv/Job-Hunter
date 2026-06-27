@@ -20,13 +20,13 @@ const STEPS = [
 
 export default function ResumeUpload() {
   const navigate = useNavigate()
-  const { parseResume, loading, step, error, sessionId, jobTitles, resumeText } = useSession()
+  const { parseResume, loading, step, error, sessionId, jobTitles } = useSession()
   const { allJobs } = useJobs()
   const fileInputRef = useRef(null)
 
   const [drag, setDrag] = useState(false)
   const [fileName, setFileName] = useState('')
-  const [extractedText, setExtractedText] = useState('')
+  const [, setExtractedText] = useState('')
   const [extracting, setExtracting] = useState(false)
   const [parsed, setParsed] = useState(false)
 
@@ -70,7 +70,7 @@ export default function ResumeUpload() {
       return fullText.trim()
     } catch (err) {
       console.error('PDF extraction error:', err)
-      throw new Error('Failed to extract text from PDF. Please try a different file.')
+      throw new Error('Failed to extract text from PDF. Please try a different file.', { cause: err })
     } finally {
       setExtracting(false)
     }

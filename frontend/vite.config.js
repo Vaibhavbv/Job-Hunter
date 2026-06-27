@@ -11,4 +11,10 @@ export default defineConfig({
     outDir: 'dist',
     sourcemap: false,
   },
+  test: {
+    environment: 'jsdom',
+    setupFiles: ['./src/test/setup.ts'],
+    css: true,
+    globals: false,
+  },
 })

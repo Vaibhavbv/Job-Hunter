@@ -21,8 +21,6 @@ export default function AuthPage() {
     }
   }, [user, navigate])
 
-  if (user) return null
-
   const handleSubmit = async (e) => {
     e.preventDefault()
     setError('')
@@ -54,6 +52,8 @@ export default function AuthPage() {
     setError('')
     setSuccess('')
   }, [])
+
+  if (user) return null
 
   return (
     <div className="min-h-screen bg-dark-bg relative overflow-hidden flex items-center justify-center px-4">

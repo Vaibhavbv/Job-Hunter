@@ -6,7 +6,7 @@
 /**
  * Generate a stable HSL color from a string (company name).
  */
-export function hashColor(str) {
+export function hashColor(str: string): string {
   let hash = 0
   for (let i = 0; i < str.length; i++) {
     hash = str.charCodeAt(i) + ((hash << 5) - hash)
@@ -17,7 +17,7 @@ export function hashColor(str) {
 /**
  * Get up to 2-letter initials from a name.
  */
-export function initials(name) {
+export function initials(name: string): string {
   return name
     .split(/[\s&,]+/)
     .filter(Boolean)
@@ -29,12 +29,12 @@ export function initials(name) {
 /**
  * Format a date string into a relative label (Today, 1d ago, 2w ago, etc.)
  */
-export function formatDate(dateStr) {
+export function formatDate(dateStr: string | null | undefined): string {
   if (!dateStr) return '—'
   const d = new Date(dateStr + 'T00:00:00')
   const today = new Date()
   today.setHours(0, 0, 0, 0)
-  const diff = Math.round((today - d) / 86400000)
+  const diff = Math.round((today.getTime() - d.getTime()) / 86400000)
   if (diff === 0) return 'Today'
   if (diff === 1) return '1d ago'
   if (diff < 7) return `${diff}d ago`
@@ -45,7 +45,7 @@ export function formatDate(dateStr) {
 /**
  * Truncate salary to max length with ellipsis.
  */
-export function formatSalary(s) {
+export function formatSalary(s: string | null | undefined): string {
   if (!s) return '—'
   return s.length > 30 ? s.slice(0, 28) + '…' : s
 }
@@ -53,7 +53,7 @@ export function formatSalary(s) {
 /**
  * Truncate any string to a given length with ellipsis.
  */
-export function truncate(str, len) {
+export function truncate(str: string | null | undefined, len: number): string {
   if (!str) return ''
   return str.length > len ? str.slice(0, len) + '…' : str
 }
@@ -61,7 +61,7 @@ export function truncate(str, len) {
 /**
  * Get color for a relevancy score (green / yellow / orange / red).
  */
-export function scoreColor(score) {
+export function scoreColor(score: number): string {
   if (score >= 75) return '#00ff88'
   if (score >= 50) return '#fbbf24'
   if (score >= 25) return '#f97316'
@@ -71,7 +71,7 @@ export function scoreColor(score) {
 /**
  * Get label for a relevancy score.
  */
-export function scoreLabel(score) {
+export function scoreLabel(score: number): string {
   if (score >= 75) return 'Excellent'
   if (score >= 50) return 'Good'
   if (score >= 25) return 'Fair'
