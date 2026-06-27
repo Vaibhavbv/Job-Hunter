@@ -68,27 +68,62 @@ export default function App() {
                       <Route path="/auth" element={<AuthPage />} />
 
                       {/* Protected routes */}
-                      <Route path="/" element={
-                        <ProtectedRoute><JobsBoard /></ProtectedRoute>
-                      } />
-                      <Route path="/dashboard" element={
-                        <ProtectedRoute><Dashboard /></ProtectedRoute>
-                      } />
-                      <Route path="/tracker" element={
-                        <ProtectedRoute><Tracker /></ProtectedRoute>
-                      } />
-                      <Route path="/analytics" element={
-                        <ProtectedRoute><Analytics /></ProtectedRoute>
-                      } />
-                      <Route path="/settings" element={
-                        <ProtectedRoute><Settings /></ProtectedRoute>
-                      } />
-                      <Route path="/upload" element={
-                        <ProtectedRoute><ResumeUpload /></ProtectedRoute>
-                      } />
-                      <Route path="/ai-dashboard" element={
-                        <ProtectedRoute><AIDashboard /></ProtectedRoute>
-                      } />
+                      <Route
+                        path="/"
+                        element={
+                          <ProtectedRoute>
+                            <JobsBoard />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/dashboard"
+                        element={
+                          <ProtectedRoute>
+                            <Dashboard />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/tracker"
+                        element={
+                          <ProtectedRoute>
+                            <Tracker />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/analytics"
+                        element={
+                          <ProtectedRoute>
+                            <Analytics />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/settings"
+                        element={
+                          <ProtectedRoute>
+                            <Settings />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/upload"
+                        element={
+                          <ProtectedRoute>
+                            <ResumeUpload />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/ai-dashboard"
+                        element={
+                          <ProtectedRoute>
+                            <AIDashboard />
+                          </ProtectedRoute>
+                        }
+                      />
                     </Routes>
                   </Suspense>
                 </AnimatePresence>

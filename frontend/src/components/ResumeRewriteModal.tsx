@@ -2,11 +2,18 @@ import { useState } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
 import * as api from '../services/api'
 import { scoreColor } from '../utils/format'
+import type { AiJob } from '../types/database'
 
-export default function ResumeRewriteModal({ job, sessionId, onClose }) {
+interface ResumeRewriteModalProps {
+  job: AiJob
+  sessionId: string
+  onClose: () => void
+}
+
+export default function ResumeRewriteModal({ job, sessionId, onClose }: ResumeRewriteModalProps) {
   const [rewrittenResume, setRewrittenResume] = useState('')
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState(null)
+  const [error, setError] = useState<string | null>(null)
   const [showRewrite, setShowRewrite] = useState(false)
 
   const handleRewrite = async () => {
@@ -17,7 +24,7 @@ export default function ResumeRewriteModal({ job, sessionId, onClose }) {
       setRewrittenResume(data.rewritten_resume)
       setShowRewrite(true)
     } catch (err) {
-      setError(err.message)
+      setError(err instanceof Error ? err.message : String(err))
     } finally {
       setLoading(false)
     }
@@ -102,19 +109,23 @@ export default function ResumeRewriteModal({ job, sessionId, onClose }) {
           />
           <MiniStat
             label="Salary Match"
-            value={job.salary_match === 'true' ? '✓ Yes' : job.salary_match === 'false' ? '✗ No' : '? Unknown'}
+            value={
+              job.salary_match === 'true' ? '✓ Yes' : job.salary_match === 'false' ? '✗ No' : '? Unknown'
+            }
             highlight={job.salary_match === 'true'}
           />
           <MiniStat
             label="Experience"
-            value={job.experience_match === true ? '✓ Match' : job.experience_match === false ? '✗ Mismatch' : '—'}
+            value={
+              job.experience_match === true
+                ? '✓ Match'
+                : job.experience_match === false
+                  ? '✗ Mismatch'
+                  : '—'
+            }
             highlight={job.experience_match === true}
           />
-          <MiniStat
-            label="Salary"
-            value={job.salary || 'Not listed'}
-            highlight={!!job.salary}
-          />
+          <MiniStat label="Salary" value={job.salary || 'Not listed'} highlight={!!job.salary} />
         </div>
 
         {/* Body — scrollable */}
@@ -184,7 +195,7 @@ export default function ResumeRewriteModal({ job, sessionId, onClose }) {
                 </div>
                 <textarea
                   value={rewrittenResume}
-                  onChange={e => setRewrittenResume(e.target.value)}
+                  onChange={(e) => setRewrittenResume(e.target.value)}
                   className="w-full h-[400px] bg-dark-bg border border-dark-border rounded-xl p-4 text-sm text-gray-300 font-mono leading-relaxed resize-none outline-none focus:border-accent/30 transition-colors"
                 />
               </motion.div>
@@ -234,7 +245,14 @@ export default function ResumeRewriteModal({ job, sessionId, onClose }) {
   )
 }
 
-function MiniStat({ label, value, highlight, color }) {
+interface MiniStatProps {
+  label: string
+  value: string
+  highlight?: boolean
+  color?: string
+}
+
+function MiniStat({ label, value, highlight, color }: MiniStatProps) {
   return (
     <div className="bg-dark-bg rounded-xl p-3 text-center">
       <p className="text-[10px] font-mono text-dark-muted uppercase tracking-wider mb-1">{label}</p>

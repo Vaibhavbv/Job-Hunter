@@ -9,7 +9,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
 const queryClient = new QueryClient()
 
-ReactDOM.createRoot(document.getElementById('root')).render(
+ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
       <MotionConfig reducedMotion="user">
@@ -18,5 +18,5 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         </BrowserRouter>
       </MotionConfig>
     </QueryClientProvider>
-  </React.StrictMode>
+  </React.StrictMode>,
 )

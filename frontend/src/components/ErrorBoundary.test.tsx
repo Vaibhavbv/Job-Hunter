@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import ErrorBoundary from './ErrorBoundary'
 
-function Bomb({ flag }) {
+function Bomb({ flag }: { flag: { current: boolean } }) {
   if (flag.current) throw new Error('Boom')
   return <div>Safe content</div>
 }

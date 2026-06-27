@@ -1,37 +1,58 @@
 import { useRef, useMemo } from 'react'
 import { motion, useMotionValue, useSpring, useTransform } from 'motion/react'
 import { hashColor, initials, formatDate, truncate } from '../utils/format'
+import type { Job } from '../types/database'
 
-const platformColors = {
+const platformColors: Record<string, string> = {
   LinkedIn: 'bg-linkedin/10 text-linkedin border-linkedin/20',
-  Naukri:   'bg-naukri/10 text-naukri border-naukri/20',
-  Indeed:   'bg-indeed/10 text-indeed border-indeed/20',
+  Naukri: 'bg-naukri/10 text-naukri border-naukri/20',
+  Indeed: 'bg-indeed/10 text-indeed border-indeed/20',
+}
+
+interface JobCardProps {
+  job: Job
+  onBookmark?: (job: Job) => void
+  isBookmarked?: boolean
+  onClick?: (job: Job) => void
+  index?: number
 }
 
 /**
  * JobCard with subtle 3D tilt on hover using useMotionValue + rotateX/Y (max 8deg).
  * A moving glossy light reflection follows the cursor.
  */
-export default function JobCard({ job, onBookmark, isBookmarked, onClick, index = 0 }) {
-  const cardRef = useRef(null)
+export default function JobCard({
+  job,
+  onBookmark,
+  isBookmarked,
+  onClick,
+  index = 0,
+}: JobCardProps) {
+  const cardRef = useRef<HTMLDivElement>(null)
 
   // Motion values for 3D tilt effect
   const mouseX = useMotionValue(0)
   const mouseY = useMotionValue(0)
 
   // Spring-smoothed rotation (max 8 degrees)
-  const rotateX = useSpring(useTransform(mouseY, [-0.5, 0.5], [8, -8]), { stiffness: 200, damping: 20 })
-  const rotateY = useSpring(useTransform(mouseX, [-0.5, 0.5], [-8, 8]), { stiffness: 200, damping: 20 })
+  const rotateX = useSpring(useTransform(mouseY, [-0.5, 0.5], [8, -8]), {
+    stiffness: 200,
+    damping: 20,
+  })
+  const rotateY = useSpring(useTransform(mouseX, [-0.5, 0.5], [-8, 8]), {
+    stiffness: 200,
+    damping: 20,
+  })
 
   // Glossy light position — hoisted outside JSX to avoid creating new motion values on every render
   const lightX = useTransform(mouseX, [-0.5, 0.5], ['0%', '100%'])
   const lightY = useTransform(mouseY, [-0.5, 0.5], ['0%', '100%'])
   const lightBackground = useTransform(
     [lightX, lightY],
-    ([x, y]) => `radial-gradient(circle at ${x} ${y}, rgba(255,255,255,0.06) 0%, transparent 60%)`
+    ([x, y]) => `radial-gradient(circle at ${x} ${y}, rgba(255,255,255,0.06) 0%, transparent 60%)`,
   )
 
-  const handleMouseMove = (e) => {
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     const rect = cardRef.current?.getBoundingClientRect()
     if (!rect) return
     // Normalize to -0.5 to 0.5.
@@ -82,7 +103,8 @@ export default function JobCard({ job, onBookmark, isBookmarked, onClick, index 
             <p className="text-dark-muted text-xs mt-0.5 truncate">{job.company}</p>
             {job.location && (
               <p className="text-dark-muted/60 text-[11px] mt-0.5 flex items-center gap-1">
-                <span className="text-[9px]">📍</span>{truncate(job.location, 35)}
+                <span className="text-[9px]">📍</span>
+                {truncate(job.location, 35)}
               </p>
             )}
           </div>
@@ -90,7 +112,10 @@ export default function JobCard({ job, onBookmark, isBookmarked, onClick, index 
           {/* Bookmark button */}
           {onBookmark && (
             <motion.button
-              onClick={(e) => { e.stopPropagation(); onBookmark(job) }}
+              onClick={(e) => {
+                e.stopPropagation()
+                onBookmark(job)
+              }}
               className="text-dark-muted hover:text-accent transition-colors"
               whileTap={{ scale: 1.3 }}
             >
@@ -106,7 +131,9 @@ export default function JobCard({ job, onBookmark, isBookmarked, onClick, index 
 
         {/* Tags */}
         <div className="flex flex-wrap gap-1.5 mt-3">
-          <span className={`text-[10px] font-mono font-semibold px-2 py-0.5 rounded-md border ${platformColors[job.platform] || 'bg-dark-hover text-dark-muted border-dark-border'}`}>
+          <span
+            className={`text-[10px] font-mono font-semibold px-2 py-0.5 rounded-md border ${platformColors[job.platform || ''] || 'bg-dark-hover text-dark-muted border-dark-border'}`}
+          >
             {job.platform}
           </span>
           <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-accent/5 text-accent border border-accent/10">
@@ -129,7 +156,7 @@ export default function JobCard({ job, onBookmark, isBookmarked, onClick, index 
               href={job.url}
               target="_blank"
               rel="noopener noreferrer"
-              onClick={e => e.stopPropagation()}
+              onClick={(e) => e.stopPropagation()}
               className="text-[11px] font-mono font-semibold text-accent hover:text-accent-dim transition-colors"
             >
               Apply →

@@ -1,12 +1,22 @@
 import { useEffect, useRef } from 'react'
 import { useInView, useMotionValue, useSpring } from 'motion/react'
 
+interface AnimatedCounterProps {
+  value: number
+  duration?: number
+  className?: string
+}
+
 /**
  * AnimatedCounter — spring-animated count-up that triggers when in viewport.
  * Uses motion springs for a natural, physical feel.
  */
-export default function AnimatedCounter({ value, duration = 1.5, className = '' }) {
-  const ref = useRef(null)
+export default function AnimatedCounter({
+  value,
+  duration = 1.5,
+  className = '',
+}: AnimatedCounterProps) {
+  const ref = useRef<HTMLSpanElement>(null)
   const isInView = useInView(ref, { once: true })
 
   const motionValue = useMotionValue(0)
@@ -31,5 +41,9 @@ export default function AnimatedCounter({ value, duration = 1.5, className = '' 
     return unsubscribe
   }, [springValue])
 
-  return <span ref={ref} className={className}>0</span>
+  return (
+    <span ref={ref} className={className}>
+      0
+    </span>
+  )
 }

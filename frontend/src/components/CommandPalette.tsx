@@ -3,29 +3,37 @@ import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'motion/react'
 import { useAuth } from '../hooks/useAuth'
 
-const routes = [
-  { name: 'Jobs Board', path: '/', icon: '⬡' },
-  { name: 'Overview', path: '/dashboard', icon: '◈' },
-  { name: 'Resume', path: '/upload', icon: '📄' },
-  { name: 'AI Match', path: '/ai-dashboard', icon: '🎯' },
-  { name: 'Tracker', path: '/tracker', icon: '◫' },
-  { name: 'Analytics', path: '/analytics', icon: '◩' },
-  { name: 'Settings', path: '/settings', icon: '⚙' },
+interface RouteCommand {
+  name: string
+  path: string | null
+  icon: string
+  type: 'navigate' | 'action'
+  action?: 'signout'
+}
+
+const routes: RouteCommand[] = [
+  { name: 'Jobs Board', path: '/', icon: '⬡', type: 'navigate' },
+  { name: 'Overview', path: '/dashboard', icon: '◈', type: 'navigate' },
+  { name: 'Resume', path: '/upload', icon: '📄', type: 'navigate' },
+  { name: 'AI Match', path: '/ai-dashboard', icon: '🎯', type: 'navigate' },
+  { name: 'Tracker', path: '/tracker', icon: '◫', type: 'navigate' },
+  { name: 'Analytics', path: '/analytics', icon: '◩', type: 'navigate' },
+  { name: 'Settings', path: '/settings', icon: '⚙', type: 'navigate' },
 ]
 
 export default function CommandPalette() {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
-  const inputRef = useRef(null)
+  const inputRef = useRef<HTMLInputElement>(null)
   const navigate = useNavigate()
   const { signOut } = useAuth()
 
   // Open with Cmd+K / Ctrl+K
   useEffect(() => {
-    const down = (e) => {
+    const down = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault()
-        setOpen(prev => !prev)
+        setOpen((prev) => !prev)
       }
       if (e.key === 'Escape') setOpen(false)
     }
@@ -41,19 +49,19 @@ export default function CommandPalette() {
   }, [open])
 
   // All commands including sign out
-  const allCommands = useMemo(() => [
-    ...routes.map(r => ({ ...r, type: 'navigate' })),
-    { name: 'Sign Out', path: null, icon: '↪', type: 'action', action: 'signout' },
-  ], [])
+  const allCommands = useMemo<RouteCommand[]>(
+    () => [...routes, { name: 'Sign Out', path: null, icon: '↪', type: 'action', action: 'signout' }],
+    [],
+  )
 
   // Search results
   const filteredCommands = useMemo(() => {
     if (!query) return allCommands
     const q = query.toLowerCase()
-    return allCommands.filter(r => r.name.toLowerCase().includes(q))
+    return allCommands.filter((r) => r.name.toLowerCase().includes(q))
   }, [query, allCommands])
 
-  const handleSelect = async (cmd) => {
+  const handleSelect = async (cmd: RouteCommand) => {
     if (cmd.type === 'action' && cmd.action === 'signout') {
       await signOut()
       navigate('/auth')
@@ -90,7 +98,7 @@ export default function CommandPalette() {
                 ref={inputRef}
                 type="text"
                 value={query}
-                onChange={e => setQuery(e.target.value)}
+                onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search pages, commands..."
                 className="w-full py-3 bg-transparent text-sm font-mono outline-none placeholder:text-dark-muted"
                 id="command-palette-input"
@@ -118,7 +126,9 @@ export default function CommandPalette() {
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: i * 0.03 }}
                   >
-                    <span className={`font-mono text-sm ${item.action === 'signout' ? '' : 'text-accent'}`}>
+                    <span
+                      className={`font-mono text-sm ${item.action === 'signout' ? '' : 'text-accent'}`}
+                    >
                       {item.icon}
                     </span>
                     <span className="text-sm">{item.name}</span>

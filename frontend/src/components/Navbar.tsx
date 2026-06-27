@@ -20,12 +20,12 @@ export default function Navbar() {
   const location = useLocation()
   const navigate = useNavigate()
   const [showUserMenu, setShowUserMenu] = useState(false)
-  const menuRef = useRef(null)
+  const menuRef = useRef<HTMLDivElement>(null)
 
   // Close menu on outside click
   useEffect(() => {
-    const handler = (e) => {
-      if (menuRef.current && !menuRef.current.contains(e.target)) {
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         setShowUserMenu(false)
       }
     }
@@ -43,7 +43,7 @@ export default function Navbar() {
     .split(/[\s@]+/)
     .filter(Boolean)
     .slice(0, 2)
-    .map(w => w[0].toUpperCase())
+    .map((w) => w[0].toUpperCase())
     .join('')
 
   return (
@@ -69,7 +69,7 @@ export default function Navbar() {
 
         {/* Nav Links */}
         <nav className="flex items-center gap-0.5">
-          {navItems.map(item => {
+          {navItems.map((item) => {
             const isActive = location.pathname === item.to
             return (
               <NavLink
@@ -77,7 +77,9 @@ export default function Navbar() {
                 to={item.to}
                 className="relative px-2.5 py-1.5 text-xs font-mono transition-colors rounded-lg"
               >
-                <span className={`${isActive ? 'text-accent' : 'text-dark-muted hover:text-white'} transition-colors`}>
+                <span
+                  className={`${isActive ? 'text-accent' : 'text-dark-muted hover:text-white'} transition-colors`}
+                >
                   <span className="mr-1 hidden lg:inline">{item.icon}</span>
                   {item.label}
                 </span>
@@ -111,7 +113,7 @@ export default function Navbar() {
           {user && (
             <div className="relative" ref={menuRef}>
               <motion.button
-                onClick={() => setShowUserMenu(prev => !prev)}
+                onClick={() => setShowUserMenu((prev) => !prev)}
                 className="w-8 h-8 rounded-lg bg-gradient-to-br from-accent/30 to-violet/30 border border-accent/20 flex items-center justify-center text-white text-[11px] font-mono font-bold hover:border-accent/40 transition-colors"
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
@@ -142,7 +144,10 @@ export default function Navbar() {
                     {/* Menu items */}
                     <div className="py-1">
                       <button
-                        onClick={() => { navigate('/settings'); setShowUserMenu(false) }}
+                        onClick={() => {
+                          navigate('/settings')
+                          setShowUserMenu(false)
+                        }}
                         className="w-full px-4 py-2 text-left text-sm font-mono text-dark-muted hover:text-white hover:bg-dark-hover transition-colors flex items-center gap-2"
                       >
                         <span>⚙</span> Settings

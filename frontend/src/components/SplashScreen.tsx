@@ -62,9 +62,7 @@ export default function SplashScreen() {
         </motion.div>
 
         {/* Loading bar */}
-        <motion.div
-          className="w-40 h-1 bg-dark-border rounded-full overflow-hidden mt-1"
-        >
+        <motion.div className="w-40 h-1 bg-dark-border rounded-full overflow-hidden mt-1">
           <motion.div
             className="h-full rounded-full"
             style={{ background: 'var(--gradient-accent)' }}

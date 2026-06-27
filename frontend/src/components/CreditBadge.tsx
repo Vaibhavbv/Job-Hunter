@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
 import * as api from '../services/api'
+import type { CheckCreditsResult } from '../services/api'
 
 export default function CreditBadge() {
-  const [credits, setCredits] = useState(null)
+  const [credits, setCredits] = useState<CheckCreditsResult | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -27,8 +28,8 @@ export default function CreditBadge() {
     remaining_percent > 60
       ? 'text-accent border-accent/20 bg-accent/5'
       : remaining_percent > 25
-      ? 'text-yellow-400 border-yellow-400/20 bg-yellow-400/5'
-      : 'text-red-400 border-red-400/20 bg-red-400/5'
+        ? 'text-yellow-400 border-yellow-400/20 bg-yellow-400/5'
+        : 'text-red-400 border-red-400/20 bg-red-400/5'
 
   return (
     <AnimatePresence>
