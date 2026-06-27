@@ -1,22 +1,25 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from './useSupabase'
 import * as api from '../services/api'
+import type { AiJob } from '../types/database'
 
 const SESSION_KEY = 'jh_session_id'
 
+type Step = 'parsing' | 'fetching' | 'scoring' | 'rewriting' | ''
+
 export function useSession() {
-  const [sessionId, setSessionId] = useState(() => localStorage.getItem(SESSION_KEY))
+  const [sessionId, setSessionId] = useState<string | null>(() => localStorage.getItem(SESSION_KEY))
   const [resumeText, setResumeText] = useState('')
-  const [jobTitles, setJobTitles] = useState([])
-  const [aiJobs, setAiJobs] = useState([])
+  const [jobTitles, setJobTitles] = useState<string[]>([])
+  const [aiJobs, setAiJobs] = useState<AiJob[]>([])
   const [loading, setLoading] = useState(false)
-  const [step, setStep] = useState('') // 'parsing' | 'fetching' | 'scoring' | 'rewriting' | ''
-  const [error, setError] = useState(null)
+  const [step, setStep] = useState<Step>('')
+  const [error, setError] = useState<string | null>(null)
 
   // Load session data from Supabase if we have a session ID
   useEffect(() => {
     if (!sessionId) return
-    
+
     async function loadSession() {
       try {
         const { data: session } = await supabase
@@ -48,7 +51,7 @@ export function useSession() {
   }, [sessionId])
 
   // Parse resume text via edge function (now with auth)
-  const parseResume = useCallback(async (text) => {
+  const parseResume = useCallback(async (text: string) => {
     setLoading(true)
     setStep('parsing')
     setError(null)
@@ -63,7 +66,7 @@ export function useSession() {
 
       return data
     } catch (err) {
-      setError(err.message)
+      setError(err instanceof Error ? err.message : String(err))
       throw err
     } finally {
       setLoading(false)
@@ -85,7 +88,7 @@ export function useSession() {
       setAiJobs(data.jobs || [])
       return data
     } catch (err) {
-      setError(err.message)
+      setError(err instanceof Error ? err.message : String(err))
       throw err
     } finally {
       setLoading(false)
@@ -107,7 +110,7 @@ export function useSession() {
       setAiJobs(data.jobs || [])
       return data
     } catch (err) {
-      setError(err.message)
+      setError(err instanceof Error ? err.message : String(err))
       throw err
     } finally {
       setLoading(false)
@@ -116,24 +119,27 @@ export function useSession() {
   }, [sessionId])
 
   // Rewrite resume for a specific job (now with auth)
-  const rewriteResume = useCallback(async (jobId) => {
-    if (!sessionId) return
+  const rewriteResume = useCallback(
+    async (jobId: number) => {
+      if (!sessionId) return
 
-    setLoading(true)
-    setStep('rewriting')
-    setError(null)
+      setLoading(true)
+      setStep('rewriting')
+      setError(null)
 
-    try {
-      const data = await api.rewriteResume(sessionId, { job_id: jobId })
-      return data.rewritten_resume
-    } catch (err) {
-      setError(err.message)
-      throw err
-    } finally {
-      setLoading(false)
-      setStep('')
-    }
-  }, [sessionId])
+      try {
+        const data = await api.rewriteResume(sessionId, { job_id: jobId })
+        return data.rewritten_resume
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err))
+        throw err
+      } finally {
+        setLoading(false)
+        setStep('')
+      }
+    },
+    [sessionId],
+  )
 
   // Check Apify credits (now with auth)
   const checkCredits = useCallback(async () => {

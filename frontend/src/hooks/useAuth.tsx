@@ -1,11 +1,29 @@
-import { createContext, useContext, useEffect, useState, useCallback } from 'react'
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  useCallback,
+  type ReactNode,
+} from 'react'
+import type { User } from '@supabase/supabase-js'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from './useSupabase'
+import type { Profile } from '../types/database'
 
-const AuthContext = createContext(null)
+interface AuthContextValue {
+  user: User | null
+  profile: Profile | null
+  loading: boolean
+  signUp: (email: string, password: string, fullName: string) => Promise<unknown>
+  signIn: (email: string, password: string) => Promise<unknown>
+  signOut: () => Promise<void>
+}
 
-export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null)
+const AuthContext = createContext<AuthContextValue | null>(null)
+
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [user, setUser] = useState<User | null>(null)
   const [loadingUser, setLoadingUser] = useState(true)
   const queryClient = useQueryClient()
 
@@ -17,22 +35,22 @@ export function AuthProvider({ children }) {
     })
 
     // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
-        setUser(session?.user ?? null)
-        setLoadingUser(false)
-        if (!session?.user) {
-          queryClient.removeQueries({ queryKey: ['profile'] })
-        }
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      setUser(session?.user ?? null)
+      setLoadingUser(false)
+      if (!session?.user) {
+        queryClient.removeQueries({ queryKey: ['profile'] })
       }
-    )
+    })
 
     return () => subscription.unsubscribe()
   }, [queryClient])
 
   const { data: profile = null, isLoading: loadingProfile } = useQuery({
     queryKey: ['profile', user?.id],
-    queryFn: async () => {
+    queryFn: async (): Promise<Profile | null> => {
       if (!user?.id) return null
       const { data, error } = await supabase
         .from('profiles')
@@ -73,7 +91,7 @@ export function AuthProvider({ children }) {
 
   const loading = loadingUser || (!!user && loadingProfile)
 
-  const signUp = useCallback(async (email, password, fullName) => {
+  const signUp = useCallback(async (email: string, password: string, fullName: string) => {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -85,7 +103,7 @@ export function AuthProvider({ children }) {
     return data
   }, [])
 
-  const signIn = useCallback(async (email, password) => {
+  const signIn = useCallback(async (email: string, password: string) => {
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
