@@ -1,15 +1,28 @@
 import { useState, useEffect, useCallback } from 'react'
-import { motion, AnimatePresence } from 'motion/react'
+import { motion, AnimatePresence, type Variants } from 'motion/react'
 import { useTheme } from '../hooks/useTheme'
 import { useJobs } from '../hooks/useJobs'
 import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../hooks/useSupabase'
 import { useQueryClient } from '@tanstack/react-query'
+import type { UserFilter } from '../types/database'
 
-const item = {
+const item: Variants = {
   hidden: { opacity: 0, y: 20 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.4, ease: [0.16, 1, 0.3, 1] } },
+  show: { opacity: 1, y: 0, transition: { duration: 0.4, ease: [0.16, 1, 0.3, 1] as const } },
 }
+
+interface ProfileForm {
+  headline: string
+  bio: string
+  skills: string[]
+  preferred_roles: string[]
+  preferred_locations: string[]
+  min_salary: string
+  experience_years: string
+}
+
+type ArrayField = 'skills' | 'preferred_roles' | 'preferred_locations'
 
 export default function Settings() {
   const { theme, toggle } = useTheme()
@@ -19,7 +32,7 @@ export default function Settings() {
   const [supabaseStatus] = useState('connected')
 
   // ─── Profile Form State ───
-  const [profileForm, setProfileForm] = useState({
+  const [profileForm, setProfileForm] = useState<ProfileForm>({
     headline: '',
     bio: '',
     skills: [],
@@ -43,21 +56,22 @@ export default function Settings() {
         skills: Array.isArray(profile.skills) ? profile.skills : [],
         preferred_roles: Array.isArray(profile.preferred_roles) ? profile.preferred_roles : [],
         preferred_locations: Array.isArray(profile.preferred_locations) ? profile.preferred_locations : [],
-        min_salary: profile.min_salary || '',
-        experience_years: profile.experience_years || '',
+        min_salary: profile.min_salary != null ? String(profile.min_salary) : '',
+        experience_years: profile.experience_years != null ? String(profile.experience_years) : '',
       })
     }
   }, [profile])
 
   // ─── Scraping Filters State ───
-  const [filters, setFilters] = useState([])
+  const [filters, setFilters] = useState<UserFilter[]>([])
   const [newRole, setNewRole] = useState('')
   const [newLocation, setNewLocation] = useState('Remote')
   const [loadingFilters, setLoadingFilters] = useState(true)
 
   useEffect(() => {
     if (user) {
-      supabase.from('user_filters')
+      supabase
+        .from('user_filters')
         .select('*')
         .order('created_at', { ascending: false })
         .then(({ data }) => {
@@ -68,24 +82,24 @@ export default function Settings() {
   }, [user])
 
   // ─── Profile Handlers ───
-  const updateField = useCallback((field, value) => {
-    setProfileForm(prev => ({ ...prev, [field]: value }))
+  const updateField = useCallback(<K extends keyof ProfileForm>(field: K, value: ProfileForm[K]) => {
+    setProfileForm((prev) => ({ ...prev, [field]: value }))
   }, [])
 
-  const addTag = useCallback((field, inputState, setInputState) => {
+  const addTag = useCallback((field: ArrayField, inputState: string, setInputState: (v: string) => void) => {
     const trimmed = inputState.trim()
     if (!trimmed) return
-    setProfileForm(prev => {
+    setProfileForm((prev) => {
       if (prev[field].includes(trimmed)) return prev
       return { ...prev, [field]: [...prev[field], trimmed] }
     })
     setInputState('')
   }, [])
 
-  const removeTag = useCallback((field, value) => {
-    setProfileForm(prev => ({
+  const removeTag = useCallback((field: ArrayField, value: string) => {
+    setProfileForm((prev) => ({
       ...prev,
-      [field]: prev[field].filter(v => v !== value),
+      [field]: prev[field].filter((v) => v !== value),
     }))
   }, [])
 
@@ -123,17 +137,22 @@ export default function Settings() {
   }
 
   // ─── Filter Handlers ───
-  const handleAddFilter = async (e) => {
+  const handleAddFilter = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!newRole.trim()) return
+    if (!user || !newRole.trim()) return
     try {
-      const { data, error } = await supabase.from('user_filters').insert([{
-        user_id: user.id,
-        role_type: newRole.trim(),
-        location: newLocation.trim(),
-        platform_preference: 'All',
-        is_active: true
-      }]).select()
+      const { data, error } = await supabase
+        .from('user_filters')
+        .insert([
+          {
+            user_id: user.id,
+            role_type: newRole.trim(),
+            location: newLocation.trim(),
+            platform_preference: 'All',
+            is_active: true,
+          },
+        ])
+        .select()
 
       if (error) throw error
       if (data) setFilters([data[0], ...filters])
@@ -145,20 +164,18 @@ export default function Settings() {
     }
   }
 
-  const toggleFilterActive = async (filterId, currentState) => {
+  const toggleFilterActive = async (filterId: string, currentState: boolean) => {
     try {
-      setFilters(filters.map(f => f.id === filterId ? { ...f, is_active: !currentState } : f))
-      await supabase.from('user_filters')
-        .update({ is_active: !currentState })
-        .eq('id', filterId)
+      setFilters(filters.map((f) => (f.id === filterId ? { ...f, is_active: !currentState } : f)))
+      await supabase.from('user_filters').update({ is_active: !currentState }).eq('id', filterId)
     } catch (err) {
       console.error(err)
     }
   }
 
-  const deleteFilter = async (filterId) => {
+  const deleteFilter = async (filterId: string) => {
     try {
-      setFilters(filters.filter(f => f.id !== filterId))
+      setFilters(filters.filter((f) => f.id !== filterId))
       await supabase.from('user_filters').delete().eq('id', filterId)
     } catch (err) {
       console.error(err)
@@ -177,9 +194,7 @@ export default function Settings() {
         <h1 className="font-display font-bold text-2xl tracking-tight">
           System <span className="text-accent">Config</span>
         </h1>
-        <p className="text-dark-muted text-xs font-mono mt-1">
-          Profile, preferences, and connection status
-        </p>
+        <p className="text-dark-muted text-xs font-mono mt-1">Profile, preferences, and connection status</p>
       </motion.div>
 
       {/* ═══════════════════════════════════════════════════════════
@@ -187,13 +202,9 @@ export default function Settings() {
          ═══════════════════════════════════════════════════════════ */}
       <motion.div variants={item} className="bg-dark-card border border-dark-border rounded-2xl p-5 mb-4">
         <div className="flex justify-between items-center mb-5">
-          <h3 className="font-mono text-xs text-dark-muted uppercase tracking-wider">
-            Candidate Profile
-          </h3>
+          <h3 className="font-mono text-xs text-dark-muted uppercase tracking-wider">Candidate Profile</h3>
           {profile?.base_resume && (
-            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-accent/10 text-accent">
-              Resume Linked ✓
-            </span>
+            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-accent/10 text-accent">Resume Linked ✓</span>
           )}
         </div>
 
@@ -204,7 +215,7 @@ export default function Settings() {
             <input
               type="text"
               value={profileForm.headline}
-              onChange={e => updateField('headline', e.target.value)}
+              onChange={(e) => updateField('headline', e.target.value)}
               placeholder="e.g. Senior Data Engineer | Python & Spark"
               className="premium-input w-full rounded-xl text-sm"
               id="profile-headline"
@@ -216,7 +227,7 @@ export default function Settings() {
             <label className="text-xs font-mono text-dark-muted block mb-1.5">Bio / Summary</label>
             <textarea
               value={profileForm.bio}
-              onChange={e => updateField('bio', e.target.value)}
+              onChange={(e) => updateField('bio', e.target.value)}
               placeholder="Brief professional summary..."
               className="premium-input w-full rounded-xl text-sm h-20 resize-none"
               id="profile-bio"
@@ -230,7 +241,7 @@ export default function Settings() {
               <input
                 type="number"
                 value={profileForm.experience_years}
-                onChange={e => updateField('experience_years', e.target.value)}
+                onChange={(e) => updateField('experience_years', e.target.value)}
                 placeholder="e.g. 5"
                 className="premium-input w-full rounded-xl text-sm"
                 min="0"
@@ -243,7 +254,7 @@ export default function Settings() {
               <input
                 type="number"
                 value={profileForm.min_salary}
-                onChange={e => updateField('min_salary', e.target.value)}
+                onChange={(e) => updateField('min_salary', e.target.value)}
                 placeholder="e.g. 1200000"
                 className="premium-input w-full rounded-xl text-sm"
                 id="profile-salary"
@@ -253,40 +264,34 @@ export default function Settings() {
 
           {/* Skills Tag Input */}
           <div>
-            <label className="text-xs font-mono text-dark-muted block mb-1.5">
-              Skills ({profileForm.skills.length})
-            </label>
+            <label className="text-xs font-mono text-dark-muted block mb-1.5">Skills ({profileForm.skills.length})</label>
             <div className="flex gap-2 mb-2">
               <input
                 type="text"
                 value={skillInput}
-                onChange={e => setSkillInput(e.target.value)}
-                onKeyDown={e => {
-                  if (e.key === 'Enter') { e.preventDefault(); addTag('skills', skillInput, setSkillInput) }
+                onChange={(e) => setSkillInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    addTag('skills', skillInput, setSkillInput)
+                  }
                 }}
                 placeholder="Add a skill and press Enter"
                 className="premium-input flex-1 rounded-xl text-sm"
                 id="profile-skills-input"
               />
-              <button
-                onClick={() => addTag('skills', skillInput, setSkillInput)}
-                className="premium-btn px-3 py-2 rounded-xl text-sm"
-                type="button"
-              >
+              <button onClick={() => addTag('skills', skillInput, setSkillInput)} className="premium-btn px-3 py-2 rounded-xl text-sm" type="button">
                 +
               </button>
             </div>
             <div className="flex flex-wrap gap-1.5">
-              {profileForm.skills.map(skill => (
+              {profileForm.skills.map((skill) => (
                 <span
                   key={skill}
                   className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-accent/5 text-accent border border-accent/10 font-mono text-xs"
                 >
                   {skill}
-                  <button
-                    onClick={() => removeTag('skills', skill)}
-                    className="text-accent/60 hover:text-accent ml-0.5"
-                  >
+                  <button onClick={() => removeTag('skills', skill)} className="text-accent/60 hover:text-accent ml-0.5">
                     ×
                   </button>
                 </span>
@@ -303,9 +308,12 @@ export default function Settings() {
               <input
                 type="text"
                 value={roleInput}
-                onChange={e => setRoleInput(e.target.value)}
-                onKeyDown={e => {
-                  if (e.key === 'Enter') { e.preventDefault(); addTag('preferred_roles', roleInput, setRoleInput) }
+                onChange={(e) => setRoleInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    addTag('preferred_roles', roleInput, setRoleInput)
+                  }
                 }}
                 placeholder="e.g. Data Engineer, ML Engineer"
                 className="premium-input flex-1 rounded-xl text-sm"
@@ -320,16 +328,13 @@ export default function Settings() {
               </button>
             </div>
             <div className="flex flex-wrap gap-1.5">
-              {profileForm.preferred_roles.map(role => (
+              {profileForm.preferred_roles.map((role) => (
                 <span
                   key={role}
                   className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-500/5 text-blue-400 border border-blue-500/10 font-mono text-xs"
                 >
                   {role}
-                  <button
-                    onClick={() => removeTag('preferred_roles', role)}
-                    className="text-blue-400/60 hover:text-blue-400 ml-0.5"
-                  >
+                  <button onClick={() => removeTag('preferred_roles', role)} className="text-blue-400/60 hover:text-blue-400 ml-0.5">
                     ×
                   </button>
                 </span>
@@ -346,9 +351,12 @@ export default function Settings() {
               <input
                 type="text"
                 value={locationInput}
-                onChange={e => setLocationInput(e.target.value)}
-                onKeyDown={e => {
-                  if (e.key === 'Enter') { e.preventDefault(); addTag('preferred_locations', locationInput, setLocationInput) }
+                onChange={(e) => setLocationInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    addTag('preferred_locations', locationInput, setLocationInput)
+                  }
                 }}
                 placeholder="e.g. Bangalore, Remote, Mumbai"
                 className="premium-input flex-1 rounded-xl text-sm"
@@ -363,16 +371,13 @@ export default function Settings() {
               </button>
             </div>
             <div className="flex flex-wrap gap-1.5">
-              {profileForm.preferred_locations.map(loc => (
+              {profileForm.preferred_locations.map((loc) => (
                 <span
                   key={loc}
                   className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-purple-500/5 text-purple-400 border border-purple-500/10 font-mono text-xs"
                 >
                   📍 {loc}
-                  <button
-                    onClick={() => removeTag('preferred_locations', loc)}
-                    className="text-purple-400/60 hover:text-purple-400 ml-0.5"
-                  >
+                  <button onClick={() => removeTag('preferred_locations', loc)} className="text-purple-400/60 hover:text-purple-400 ml-0.5">
                     ×
                   </button>
                 </span>
@@ -386,13 +391,9 @@ export default function Settings() {
               <div>
                 <p className="text-xs font-mono text-dark-muted">Base Resume</p>
                 {profile?.base_resume ? (
-                  <p className="text-sm text-accent mt-1">
-                    ✓ {profile.base_resume.length.toLocaleString()} characters uploaded
-                  </p>
+                  <p className="text-sm text-accent mt-1">✓ {profile.base_resume.length.toLocaleString()} characters uploaded</p>
                 ) : (
-                  <p className="text-sm text-amber-400 mt-1">
-                    ⚠ No resume linked — upload one via AI Dashboard
-                  </p>
+                  <p className="text-sm text-amber-400 mt-1">⚠ No resume linked — upload one via AI Dashboard</p>
                 )}
               </div>
             </div>
@@ -436,9 +437,7 @@ export default function Settings() {
          ═══════════════════════════════════════════════════════════ */}
       <motion.div variants={item} className="bg-dark-card border border-dark-border rounded-2xl p-5 mb-4">
         <div className="flex justify-between items-center mb-4">
-          <h3 className="font-mono text-xs text-dark-muted uppercase tracking-wider">
-            Scraping Preferences
-          </h3>
+          <h3 className="font-mono text-xs text-dark-muted uppercase tracking-wider">Scraping Preferences</h3>
           <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-accent/10 text-accent">Active Webhook</span>
         </div>
 
@@ -468,7 +467,7 @@ export default function Settings() {
           ) : filters.length === 0 ? (
             <div className="text-xs text-dark-muted font-mono">No scraping filters defined.</div>
           ) : (
-            filters.map(filter => (
+            filters.map((filter) => (
               <div key={filter.id} className="flex items-center justify-between bg-dark-bg p-3 rounded-xl border border-dark-border">
                 <div>
                   <p className={`text-sm font-medium ${filter.is_active ? 'text-white' : 'text-dark-muted line-through'}`}>
@@ -494,52 +493,40 @@ export default function Settings() {
 
       {/* Appearance */}
       <motion.div variants={item} className="bg-dark-card border border-dark-border rounded-2xl p-5 mb-4">
-        <h3 className="font-mono text-xs text-dark-muted uppercase tracking-wider mb-4">
-          Appearance
-        </h3>
+        <h3 className="font-mono text-xs text-dark-muted uppercase tracking-wider mb-4">Appearance</h3>
         <div className="flex items-center justify-between">
           <div>
             <p className="text-sm font-medium">Theme Mode</p>
-            <p className="text-[10px] text-dark-muted font-mono mt-0.5">
-              Current: {theme === 'dark' ? 'Dark Ops' : 'Light Mode'}
-            </p>
+            <p className="text-[10px] text-dark-muted font-mono mt-0.5">Current: {theme === 'dark' ? 'Dark Ops' : 'Light Mode'}</p>
           </div>
           <motion.button
-             onClick={toggle}
-             className={`w-14 h-7 rounded-full p-1 transition-colors ${
-               theme === 'dark' ? 'bg-accent/20' : 'bg-gray-300'
-             }`}
-             whileTap={{ scale: 0.95 }}
-           >
-             <motion.div
-               className={`w-5 h-5 rounded-full ${
-                 theme === 'dark' ? 'bg-accent' : 'bg-white'
-               }`}
-               animate={{ x: theme === 'dark' ? 24 : 0 }}
-               transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-             />
-           </motion.button>
+            onClick={toggle}
+            className={`w-14 h-7 rounded-full p-1 transition-colors ${theme === 'dark' ? 'bg-accent/20' : 'bg-gray-300'}`}
+            whileTap={{ scale: 0.95 }}
+          >
+            <motion.div
+              className={`w-5 h-5 rounded-full ${theme === 'dark' ? 'bg-accent' : 'bg-white'}`}
+              animate={{ x: theme === 'dark' ? 24 : 0 }}
+              transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+            />
+          </motion.button>
         </div>
       </motion.div>
 
       {/* Supabase Connection */}
       <motion.div variants={item} className="bg-dark-card border border-dark-border rounded-2xl p-5 mb-4">
-        <h3 className="font-mono text-xs text-dark-muted uppercase tracking-wider mb-4">
-          Database Connection
-        </h3>
+        <h3 className="font-mono text-xs text-dark-muted uppercase tracking-wider mb-4">Database Connection</h3>
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div className={`w-2 h-2 rounded-full ${
-                supabaseStatus === 'connected' ? 'bg-accent animate-pulse-dot' : 'bg-red-400'
-              }`} />
+              <div className={`w-2 h-2 rounded-full ${supabaseStatus === 'connected' ? 'bg-accent animate-pulse-dot' : 'bg-red-400'}`} />
               <span className="text-sm">Supabase</span>
             </div>
-            <span className={`text-[10px] font-mono px-2 py-0.5 rounded ${
-              supabaseStatus === 'connected'
-                ? 'bg-accent/10 text-accent'
-                : 'bg-red-500/10 text-red-400'
-            }`}>
+            <span
+              className={`text-[10px] font-mono px-2 py-0.5 rounded ${
+                supabaseStatus === 'connected' ? 'bg-accent/10 text-accent' : 'bg-red-500/10 text-red-400'
+              }`}
+            >
               {supabaseStatus === 'connected' ? 'CONNECTED' : 'DISCONNECTED'}
             </span>
           </div>
@@ -552,21 +539,14 @@ export default function Settings() {
 
       {/* Scraper Info */}
       <motion.div variants={item} className="bg-dark-card border border-dark-border rounded-2xl p-5 mb-4">
-        <h3 className="font-mono text-xs text-dark-muted uppercase tracking-wider mb-4">
-          Scraper Status
-        </h3>
+        <h3 className="font-mono text-xs text-dark-muted uppercase tracking-wider mb-4">Scraper Status</h3>
         <div className="space-y-3">
           <InfoRow label="Schedule" value="Daily at 08:00 IST" />
           <InfoRow label="Platforms" value="LinkedIn · Naukri · Indeed" />
           <InfoRow label="Last sync" value={stats.lastUpdated ? new Date(stats.lastUpdated).toLocaleString() : 'N/A'} />
           <InfoRow label="Total scraped" value={`${stats.total} jobs`} />
         </div>
-        <a
-          href="https://github.com/Vaibhavbv/Job-Hunter/actions"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="block mt-4"
-        >
+        <a href="https://github.com/Vaibhavbv/Job-Hunter/actions" target="_blank" rel="noopener noreferrer" className="block mt-4">
           <motion.button
             className="w-full py-2.5 rounded-xl bg-cold-blue/10 text-cold-blue border border-cold-blue/20 font-mono text-xs font-bold hover:bg-cold-blue/20 transition-colors"
             whileHover={{ scale: 1.01 }}
@@ -579,24 +559,22 @@ export default function Settings() {
 
       {/* About */}
       <motion.div variants={item} className="bg-dark-card border border-dark-border rounded-2xl p-5">
-        <h3 className="font-mono text-xs text-dark-muted uppercase tracking-wider mb-4">
-          About
-        </h3>
+        <h3 className="font-mono text-xs text-dark-muted uppercase tracking-wider mb-4">About</h3>
         <div className="space-y-2 text-[11px] font-mono text-dark-muted">
-           <p>Job Hunter v3.0 — AI-Powered SaaS Platform</p>
-           <p>Built with React + Vite + Tailwind + Framer Motion + Gemini AI</p>
-           <p className="flex items-center gap-2">
-             <a href="https://github.com/Vaibhavbv/Job-Hunter" target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">
-               GitHub Repository
-             </a>
-           </p>
+          <p>Job Hunter v3.0 — AI-Powered SaaS Platform</p>
+          <p>Built with React + Vite + Tailwind + Framer Motion + Gemini AI</p>
+          <p className="flex items-center gap-2">
+            <a href="https://github.com/Vaibhavbv/Job-Hunter" target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">
+              GitHub Repository
+            </a>
+          </p>
         </div>
       </motion.div>
     </motion.div>
   )
 }
 
-function InfoRow({ label, value }) {
+function InfoRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-center justify-between">
       <span className="text-[11px] font-mono text-dark-muted">{label}</span>

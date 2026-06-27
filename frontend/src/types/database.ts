@@ -134,6 +134,17 @@ export interface UserSession {
   created_at: string
 }
 
+/** `user_filters` table — per-user scraping preferences. */
+export interface UserFilter {
+  id: string
+  user_id: string
+  role_type: string
+  location: string | null
+  platform_preference: string | null
+  is_active: boolean
+  created_at: string
+}
+
 /** `ai_jobs` table — session-scoped AI-matched jobs (legacy flow). */
 export interface AiJob {
   id: number
