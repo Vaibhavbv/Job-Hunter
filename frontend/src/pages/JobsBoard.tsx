@@ -1,74 +1,80 @@
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, type ReactNode } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
-import { FixedSizeList as List } from 'react-window'
-import { useJobs } from '../hooks/useJobs'
+import { FixedSizeList as List, type ListChildComponentProps } from 'react-window'
+import { useJobs, type DateRange, type JobSort } from '../hooks/useJobs'
 import { useAuth } from '../hooks/useAuth'
 import { useEvaluations } from '../hooks/useEvaluations'
 import AnimatedCounter from '../components/AnimatedCounter'
 import { hashColor, initials, formatDate, formatSalary } from '../utils/format'
+import type { Job, Evaluation, Grade, Platform, WorkMode } from '../types/database'
 
-const GRADE_COLORS = {
-  'A+': '#00ff88', 'A': '#34d399', 'B+': '#60a5fa',
-  'B': '#818cf8', 'C': '#fbbf24', 'D': '#f97316', 'F': '#ef4444',
+const GRADE_COLORS: Record<string, string> = {
+  'A+': '#00ff88', A: '#34d399', 'B+': '#60a5fa',
+  B: '#818cf8', C: '#fbbf24', D: '#f97316', F: '#ef4444',
 }
 
-const GRADE_OPTIONS = [
+const GRADE_OPTIONS: { value: Grade | null; label: string }[] = [
   { value: null, label: 'All Grades' },
   { value: 'A+', label: 'A+' }, { value: 'A', label: 'A' },
   { value: 'B+', label: 'B+' }, { value: 'B', label: 'B' },
   { value: 'C', label: 'C' }, { value: 'D', label: 'D' }, { value: 'F', label: 'F' },
 ]
 
-const SORT_OPTIONS = [
+const SORT_OPTIONS: { value: JobSort; label: string }[] = [
   { value: 'date', label: 'Latest' },
   { value: 'company', label: 'Company A–Z' },
   { value: 'salary', label: 'Salary' },
 ]
 
-const DATE_OPTIONS = [
+const DATE_OPTIONS: { value: DateRange; label: string }[] = [
   { value: 'all', label: 'All Time' },
   { value: 'today', label: 'Today' },
   { value: '7days', label: '7 Days' },
   { value: '30days', label: '30 Days' },
 ]
 
-const WORK_MODE_OPTIONS = [
+const WORK_MODE_OPTIONS: { value: WorkMode | null; label: string; dot?: string; badgeClass?: string }[] = [
   { value: null, label: 'All Modes' },
   { value: 'Remote', label: 'Remote', dot: '#10b981', badgeClass: 'badge-remote' },
   { value: 'Hybrid', label: 'Hybrid', dot: '#f59e0b', badgeClass: 'badge-hybrid' },
   { value: 'On-site', label: 'On-site', dot: '#38bdf8', badgeClass: 'badge-onsite' },
 ]
 
-const PLATFORM_STYLES = {
+const PLATFORM_STYLES: Record<Platform, { dot: string; activeBg: string; activeBorder: string; activeText: string }> = {
   LinkedIn: { dot: '#0a66c2', activeBg: 'bg-linkedin/10', activeBorder: 'border-linkedin/30', activeText: 'text-linkedin' },
   Naukri:   { dot: '#16a34a', activeBg: 'bg-naukri/10',   activeBorder: 'border-naukri/30',   activeText: 'text-naukri' },
   Indeed:   { dot: '#d97706', activeBg: 'bg-indeed/10',    activeBorder: 'border-indeed/30',   activeText: 'text-indeed' },
 }
 
+type BookmarkId = number | string
+
 export default function JobsBoard() {
   const { jobs, allJobs, loading, filters, setFilters, filterOptions, stats } = useJobs()
   const { profile } = useAuth()
   const { evaluations } = useEvaluations()
-  const [selectedJob, setSelectedJob] = useState(null)
-  const [gradeFilter, setGradeFilter] = useState(null)
+  const [selectedJob, setSelectedJob] = useState<Job | null>(null)
+  const [gradeFilter, setGradeFilter] = useState<Grade | null>(null)
   const [showBookmarksOnly, setShowBookmarksOnly] = useState(false)
-  const [bookmarks, setBookmarks] = useState(() => {
+  const [bookmarks, setBookmarks] = useState<BookmarkId[]>(() => {
     const stored = localStorage.getItem('bookmarks')
     return stored ? JSON.parse(stored) : []
   })
 
-  const toggleBookmark = useCallback((job) => {
-    setBookmarks(prev => {
-      const id = job.id || job.dedup_key
-      const next = prev.includes(id) ? prev.filter(b => b !== id) : [...prev, id]
+  const toggleBookmark = useCallback((job: Job) => {
+    setBookmarks((prev) => {
+      const id = (job.id || job.dedup_key) as BookmarkId
+      const next = prev.includes(id) ? prev.filter((b) => b !== id) : [...prev, id]
       localStorage.setItem('bookmarks', JSON.stringify(next))
       return next
     })
   }, [])
 
-  const updateFilter = useCallback((key, value) => {
-    setFilters(prev => ({ ...prev, [key]: value }))
-  }, [setFilters])
+  const updateFilter = useCallback(
+    <K extends keyof typeof filters>(key: K, value: (typeof filters)[K]) => {
+      setFilters((prev) => ({ ...prev, [key]: value }))
+    },
+    [setFilters],
+  )
 
   const clearAllFilters = useCallback(() => {
     setFilters({ search: '', platform: null, role: null, workMode: null, dateRange: 'all', sort: 'date' })
@@ -77,7 +83,7 @@ export default function JobsBoard() {
 
   // Build evaluation lookup map: job_id -> evaluation
   const evalMap = useMemo(() => {
-    const map = new Map()
+    const map = new Map<number, Evaluation>()
     for (const e of evaluations) {
       if (e.job_id) map.set(e.job_id, e)
     }
@@ -87,10 +93,10 @@ export default function JobsBoard() {
   // Filter for bookmarks + grade view
   const displayJobs = useMemo(() => {
     let filtered = showBookmarksOnly
-      ? jobs.filter(j => bookmarks.includes(j.id || j.dedup_key))
+      ? jobs.filter((j) => bookmarks.includes((j.id || j.dedup_key) as BookmarkId))
       : jobs
     if (gradeFilter) {
-      filtered = filtered.filter(j => {
+      filtered = filtered.filter((j) => {
         const ev = evalMap.get(j.id)
         return ev && ev.grade === gradeFilter
       })
@@ -112,22 +118,22 @@ export default function JobsBoard() {
 
   // Platform counts
   const platformCounts = useMemo(() => {
-    const c = {}
-    allJobs.forEach(j => { c[j.platform] = (c[j.platform] || 0) + 1 })
+    const c: Record<string, number> = {}
+    allJobs.forEach((j) => { if (j.platform) c[j.platform] = (c[j.platform] || 0) + 1 })
     return c
   }, [allJobs])
 
   // Role counts
   const roleCounts = useMemo(() => {
-    const c = {}
-    allJobs.forEach(j => { c[j.role_type] = (c[j.role_type] || 0) + 1 })
+    const c: Record<string, number> = {}
+    allJobs.forEach((j) => { if (j.role_type) c[j.role_type] = (c[j.role_type] || 0) + 1 })
     return c
   }, [allJobs])
 
   // Work mode counts
   const workModeCounts = useMemo(() => {
-    const c = {}
-    allJobs.forEach(j => { if (j.work_mode) c[j.work_mode] = (c[j.work_mode] || 0) + 1 })
+    const c: Record<string, number> = {}
+    allJobs.forEach((j) => { if (j.work_mode) c[j.work_mode] = (c[j.work_mode] || 0) + 1 })
     return c
   }, [allJobs])
 
@@ -182,7 +188,7 @@ export default function JobsBoard() {
         </div>
         <div className="flex items-center gap-2">
           <motion.button
-            onClick={() => setShowBookmarksOnly(prev => !prev)}
+            onClick={() => setShowBookmarksOnly((prev) => !prev)}
             className={`px-4 py-2 rounded-xl font-mono text-sm border transition-all ${
               showBookmarksOnly
                 ? 'bg-accent/10 text-accent border-accent/30'
@@ -233,7 +239,7 @@ export default function JobsBoard() {
           <input
             type="text"
             value={filters.search}
-            onChange={e => updateFilter('search', e.target.value)}
+            onChange={(e) => updateFilter('search', e.target.value)}
             placeholder="Search by title, company, or location..."
             className="premium-input w-full pl-11 pr-4 py-3.5 rounded-2xl text-base"
             id="jobs-search-input"
@@ -264,27 +270,29 @@ export default function JobsBoard() {
               active={!filters.platform}
               onClick={() => updateFilter('platform', null)}
             />
-            {filterOptions.platforms.map(p => {
-              const s = PLATFORM_STYLES[p] || {}
-              return (
-                <Chip
-                  key={p}
-                  label={p}
-                  count={platformCounts[p] || 0}
-                  active={filters.platform === p}
-                  onClick={() => updateFilter('platform', filters.platform === p ? null : p)}
-                  dotColor={s.dot}
-                  activeBg={s.activeBg}
-                  activeBorder={s.activeBorder}
-                  activeText={s.activeText}
-                />
-              )
-            })}
+            {filterOptions.platforms
+              .filter((p): p is Platform => p != null)
+              .map((p) => {
+                const s = PLATFORM_STYLES[p]
+                return (
+                  <Chip
+                    key={p}
+                    label={p}
+                    count={platformCounts[p] || 0}
+                    active={filters.platform === p}
+                    onClick={() => updateFilter('platform', filters.platform === p ? null : p)}
+                    dotColor={s?.dot}
+                    activeBg={s?.activeBg}
+                    activeBorder={s?.activeBorder}
+                    activeText={s?.activeText}
+                  />
+                )
+              })}
           </FilterCategory>
 
           {/* Work Mode */}
           <FilterCategory label="Mode">
-            {WORK_MODE_OPTIONS.map(opt => (
+            {WORK_MODE_OPTIONS.map((opt) => (
               <Chip
                 key={opt.label}
                 label={opt.label}
@@ -298,7 +306,7 @@ export default function JobsBoard() {
 
           {/* Time Range */}
           <FilterCategory label="Time">
-            {DATE_OPTIONS.map(opt => (
+            {DATE_OPTIONS.map((opt) => (
               <Chip
                 key={opt.value}
                 label={opt.label}
@@ -310,7 +318,7 @@ export default function JobsBoard() {
 
           {/* Sort By */}
           <FilterCategory label="Sort">
-            {SORT_OPTIONS.map(opt => (
+            {SORT_OPTIONS.map((opt) => (
               <Chip
                 key={opt.value}
                 label={opt.label}
@@ -328,21 +336,23 @@ export default function JobsBoard() {
             active={!filters.role}
             onClick={() => updateFilter('role', null)}
           />
-          {filterOptions.roles.map(r => (
-            <Chip
-              key={r}
-              label={r}
-              count={roleCounts[r] || 0}
-              active={filters.role === r}
-              onClick={() => updateFilter('role', filters.role === r ? null : r)}
-            />
-          ))}
+          {filterOptions.roles
+            .filter((r): r is string => r != null)
+            .map((r) => (
+              <Chip
+                key={r}
+                label={r}
+                count={roleCounts[r] || 0}
+                active={filters.role === r}
+                onClick={() => updateFilter('role', filters.role === r ? null : r)}
+              />
+            ))}
         </FilterCategory>
 
         {/* Grade Filter — only show if evaluations exist */}
         {evaluations.length > 0 && (
           <FilterCategory label="Grade">
-            {GRADE_OPTIONS.map(opt => (
+            {GRADE_OPTIONS.map((opt) => (
               <Chip
                 key={opt.label}
                 label={opt.label}
@@ -411,7 +421,7 @@ export default function JobsBoard() {
               itemSize={68}
               width="100%"
             >
-              {({ index, style }) => {
+              {({ index, style }: ListChildComponentProps) => {
                 const job = displayJobs[index]
                 return (
                   <div style={style}>
@@ -420,7 +430,7 @@ export default function JobsBoard() {
                       index={index}
                       onClick={setSelectedJob}
                       onBookmark={toggleBookmark}
-                      isBookmarked={bookmarks.includes(job.id || job.dedup_key)}
+                      isBookmarked={bookmarks.includes((job.id || job.dedup_key) as BookmarkId)}
                       evaluation={evalMap.get(job.id)}
                     />
                   </div>
@@ -442,7 +452,14 @@ export default function JobsBoard() {
 }
 
 /* ─── Mini Stat Card ────────────────────────────────── */
-function MiniStat({ label, value, color, accent }) {
+interface MiniStatProps {
+  label: string
+  value: number
+  color?: string
+  accent?: boolean
+}
+
+function MiniStat({ label, value, color, accent }: MiniStatProps) {
   return (
     <motion.div
       className="stat-card"
@@ -461,7 +478,12 @@ function MiniStat({ label, value, color, accent }) {
 }
 
 /* ─── Filter Category Label ─────────────────────────── */
-function FilterCategory({ label, children }) {
+interface FilterCategoryProps {
+  label: string
+  children: ReactNode
+}
+
+function FilterCategory({ label, children }: FilterCategoryProps) {
   return (
     <div className="flex items-center gap-2 flex-wrap">
       <span className="font-mono text-[11px] text-dark-muted uppercase tracking-wider font-bold w-14 shrink-0">
@@ -475,11 +497,22 @@ function FilterCategory({ label, children }) {
 }
 
 /* ─── Filter Chip ───────────────────────────────────── */
-function Chip({ label, active, onClick, count, dotColor, activeBg, activeBorder, activeText }) {
+interface ChipProps {
+  label: string
+  active: boolean
+  onClick: () => void
+  count?: number
+  dotColor?: string
+  activeBg?: string
+  activeBorder?: string
+  activeText?: string
+}
+
+function Chip({ label, active, onClick, count, dotColor, activeBg, activeBorder, activeText }: ChipProps) {
   const activeClasses = activeBg
     ? `${activeBg} ${activeText} ${activeBorder}`
     : 'bg-accent/10 text-accent border-accent/30'
-  
+
   return (
     <motion.button
       onClick={onClick}
@@ -506,12 +539,16 @@ function Chip({ label, active, onClick, count, dotColor, activeBg, activeBorder,
 }
 
 /* ─── Work Mode Badge ───────────────────────────────── */
-function WorkModeBadge({ mode }) {
+interface WorkModeBadgeProps {
+  mode: WorkMode | null | undefined
+}
+
+function WorkModeBadge({ mode }: WorkModeBadgeProps) {
   if (!mode) return <span className="text-dark-muted/30 text-[11px] font-mono">—</span>
 
   const config = {
-    'Remote':  { cls: 'badge-remote', icon: '🏠' },
-    'Hybrid':  { cls: 'badge-hybrid', icon: '🔄' },
+    Remote:  { cls: 'badge-remote', icon: '🏠' },
+    Hybrid:  { cls: 'badge-hybrid', icon: '🔄' },
     'On-site': { cls: 'badge-onsite', icon: '🏢' },
   }[mode] || { cls: '', icon: '' }
 
@@ -524,8 +561,17 @@ function WorkModeBadge({ mode }) {
 }
 
 /* ─── Table Row ─────────────────────────────────────── */
-function JobRow({ job, index, onClick, onBookmark, isBookmarked, evaluation }) {
-  const platformStyle = PLATFORM_STYLES[job.platform] || {}
+interface JobRowProps {
+  job: Job
+  index: number
+  onClick: (job: Job) => void
+  onBookmark: (job: Job) => void
+  isBookmarked: boolean
+  evaluation: Evaluation | undefined
+}
+
+function JobRow({ job, index, onClick, onBookmark, isBookmarked, evaluation }: JobRowProps) {
+  const platformStyle = job.platform ? PLATFORM_STYLES[job.platform] : undefined
 
   return (
     <motion.div
@@ -577,9 +623,9 @@ function JobRow({ job, index, onClick, onBookmark, isBookmarked, evaluation }) {
           <span
             className="inline-flex items-center justify-center w-8 h-8 rounded-lg font-mono text-xs font-bold border"
             style={{
-              borderColor: (GRADE_COLORS[evaluation.grade] || '#8b8da3') + '40',
-              backgroundColor: (GRADE_COLORS[evaluation.grade] || '#8b8da3') + '15',
-              color: GRADE_COLORS[evaluation.grade] || '#8b8da3',
+              borderColor: (GRADE_COLORS[evaluation.grade || ''] || '#8b8da3') + '40',
+              backgroundColor: (GRADE_COLORS[evaluation.grade || ''] || '#8b8da3') + '15',
+              color: GRADE_COLORS[evaluation.grade || ''] || '#8b8da3',
             }}
             title={`Score: ${evaluation.overall_score} · ${evaluation.archetype}`}
           >
@@ -595,12 +641,12 @@ function JobRow({ job, index, onClick, onBookmark, isBookmarked, evaluation }) {
         <span
           className="inline-flex items-center gap-1.5 text-[11px] font-mono font-semibold px-2 py-1 rounded-md border"
           style={{
-            borderColor: platformStyle.dot ? `${platformStyle.dot}33` : undefined,
-            backgroundColor: platformStyle.dot ? `${platformStyle.dot}15` : undefined,
-            color: platformStyle.dot || undefined,
+            borderColor: platformStyle?.dot ? `${platformStyle.dot}33` : undefined,
+            backgroundColor: platformStyle?.dot ? `${platformStyle.dot}15` : undefined,
+            color: platformStyle?.dot || undefined,
           }}
         >
-          <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: platformStyle.dot }} />
+          <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: platformStyle?.dot }} />
           {job.platform}
         </span>
       </div>
@@ -611,7 +657,7 @@ function JobRow({ job, index, onClick, onBookmark, isBookmarked, evaluation }) {
       </span>
 
       {/* Actions */}
-      <div className="flex items-center justify-center gap-2" onClick={e => e.stopPropagation()}>
+      <div className="flex items-center justify-center gap-2" onClick={(e) => e.stopPropagation()}>
         <motion.button
           onClick={() => onBookmark(job)}
           className={`text-base transition-colors ${isBookmarked ? 'text-accent' : 'text-dark-muted/40 hover:text-accent'}`}
@@ -637,8 +683,13 @@ function JobRow({ job, index, onClick, onBookmark, isBookmarked, evaluation }) {
 }
 
 /* ─── Job Detail Modal ──────────────────────────────── */
-function JobDetailModal({ job, onClose }) {
-  const platformStyle = PLATFORM_STYLES[job.platform] || {}
+interface JobDetailModalProps {
+  job: Job
+  onClose: () => void
+}
+
+function JobDetailModal({ job, onClose }: JobDetailModalProps) {
+  const platformStyle = job.platform ? PLATFORM_STYLES[job.platform] : undefined
 
   return (
     <>
@@ -678,7 +729,7 @@ function JobDetailModal({ job, onClose }) {
 
         {/* Info Stat Grid */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 px-6 py-4 border-b border-dark-border/50">
-          <InfoStat label="Platform" value={job.platform} color={platformStyle.dot} />
+          <InfoStat label="Platform" value={job.platform} color={platformStyle?.dot} />
           <InfoStat label="Role Type" value={job.role_type} />
           <InfoStat label="Salary" value={job.salary || 'Not listed'} highlight={!!job.salary} />
           <InfoStat label="Posted" value={job.posted_date || '—'} />
@@ -715,7 +766,14 @@ function JobDetailModal({ job, onClose }) {
 }
 
 /* ─── Info Stat (in modal) ──────────────────────────── */
-function InfoStat({ label, value, color, highlight }) {
+interface InfoStatProps {
+  label: string
+  value: string | null
+  color?: string
+  highlight?: boolean
+}
+
+function InfoStat({ label, value, color, highlight }: InfoStatProps) {
   return (
     <div className="bg-dark-bg rounded-xl p-3 text-center">
       <p className="text-[10px] font-mono text-dark-muted uppercase tracking-wider mb-1">{label}</p>
