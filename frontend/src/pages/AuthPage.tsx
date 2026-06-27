@@ -3,10 +3,12 @@ import { motion, AnimatePresence } from 'motion/react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 
+type AuthMode = 'signin' | 'signup'
+
 export default function AuthPage() {
   const navigate = useNavigate()
   const { signIn, signUp, user } = useAuth()
-  const [mode, setMode] = useState('signin') // 'signin' | 'signup'
+  const [mode, setMode] = useState<AuthMode>('signin')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [fullName, setFullName] = useState('')
@@ -21,7 +23,7 @@ export default function AuthPage() {
     }
   }, [user, navigate])
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
     setSuccess('')
@@ -41,14 +43,14 @@ export default function AuthPage() {
         navigate('/', { replace: true })
       }
     } catch (err) {
-      setError(err.message || 'Something went wrong')
+      setError(err instanceof Error ? err.message : 'Something went wrong')
     } finally {
       setLoading(false)
     }
   }
 
   const toggleMode = useCallback(() => {
-    setMode(prev => prev === 'signin' ? 'signup' : 'signin')
+    setMode((prev) => (prev === 'signin' ? 'signup' : 'signin'))
     setError('')
     setSuccess('')
   }, [])
@@ -126,10 +128,14 @@ export default function AuthPage() {
         <div className="auth-card rounded-2xl p-8">
           {/* Tab Switcher */}
           <div className="flex items-center gap-1 p-1 bg-dark-bg/80 rounded-xl mb-6">
-            {['signin', 'signup'].map(m => (
+            {(['signin', 'signup'] as AuthMode[]).map((m) => (
               <motion.button
                 key={m}
-                onClick={() => { setMode(m); setError(''); setSuccess('') }}
+                onClick={() => {
+                  setMode(m)
+                  setError('')
+                  setSuccess('')
+                }}
                 className={`flex-1 py-2.5 rounded-lg font-mono text-sm font-semibold transition-all ${
                   mode === m
                     ? 'bg-dark-card text-white shadow-lg'
@@ -166,7 +172,7 @@ export default function AuthPage() {
                   <input
                     type="text"
                     value={fullName}
-                    onChange={e => setFullName(e.target.value)}
+                    onChange={(e) => setFullName(e.target.value)}
                     placeholder="John Doe"
                     className="premium-input w-full"
                     required
@@ -183,7 +189,7 @@ export default function AuthPage() {
                 <input
                   type="email"
                   value={email}
-                  onChange={e => setEmail(e.target.value)}
+                  onChange={(e) => setEmail(e.target.value)}
                   placeholder="you@example.com"
                   className="premium-input w-full"
                   required
@@ -199,7 +205,7 @@ export default function AuthPage() {
                 <input
                   type="password"
                   value={password}
-                  onChange={e => setPassword(e.target.value)}
+                  onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
                   className="premium-input w-full"
                   required
@@ -253,8 +259,10 @@ export default function AuthPage() {
                     />
                     {mode === 'signin' ? 'Signing in...' : 'Creating account...'}
                   </span>
+                ) : mode === 'signin' ? (
+                  'Sign In →'
                 ) : (
-                  mode === 'signin' ? 'Sign In →' : 'Create Account →'
+                  'Create Account →'
                 )}
               </motion.button>
             </motion.form>
@@ -268,8 +276,7 @@ export default function AuthPage() {
             >
               {mode === 'signin'
                 ? "Don't have an account? Sign Up"
-                : 'Already have an account? Sign In'
-              }
+                : 'Already have an account? Sign In'}
             </button>
           </div>
         </div>

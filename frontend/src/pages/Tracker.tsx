@@ -3,45 +3,54 @@ import { motion, AnimatePresence } from 'motion/react'
 import { useTracker } from '../hooks/useTracker'
 import { useJobs } from '../hooks/useJobs'
 import confetti from 'canvas-confetti'
+import type { ApplicationTracker, Job, TrackerStatus } from '../types/database'
 
-const STATUS_COLORS = {
-  Applied:   { bg: 'bg-cold-blue/10', border: 'border-cold-blue/20', text: 'text-cold-blue', dot: 'bg-cold-blue' },
-  Interview: { bg: 'bg-yellow-500/10', border: 'border-yellow-500/20', text: 'text-yellow-400', dot: 'bg-yellow-400' },
-  Offer:     { bg: 'bg-accent/10', border: 'border-accent/20', text: 'text-accent', dot: 'bg-accent' },
-  Rejected:  { bg: 'bg-red-500/10', border: 'border-red-500/20', text: 'text-red-400', dot: 'bg-red-400' },
+const STATUS_COLORS: Record<TrackerStatus, { bg: string; border: string; text: string; dot: string }> = {
+  Applied: { bg: 'bg-cold-blue/10', border: 'border-cold-blue/20', text: 'text-cold-blue', dot: 'bg-cold-blue' },
+  Interview: {
+    bg: 'bg-yellow-500/10',
+    border: 'border-yellow-500/20',
+    text: 'text-yellow-400',
+    dot: 'bg-yellow-400',
+  },
+  Offer: { bg: 'bg-accent/10', border: 'border-accent/20', text: 'text-accent', dot: 'bg-accent' },
+  Rejected: { bg: 'bg-red-500/10', border: 'border-red-500/20', text: 'text-red-400', dot: 'bg-red-400' },
 }
 
 export default function Tracker() {
   const { columns, columnNames, addApplication, moveApplication, removeApplication } = useTracker()
   const { allJobs } = useJobs()
   const [showAddModal, setShowAddModal] = useState(false)
-  const [draggedApp, setDraggedApp] = useState(null)
-  const [dragOverCol, setDragOverCol] = useState(null)
+  const [draggedApp, setDraggedApp] = useState<ApplicationTracker | null>(null)
+  const [dragOverCol, setDragOverCol] = useState<TrackerStatus | null>(null)
 
   // Simple HTML5 drag and drop
-  const handleDragStart = (app) => setDraggedApp(app)
+  const handleDragStart = (app: ApplicationTracker) => setDraggedApp(app)
 
-  const handleDragOver = (e, col) => {
+  const handleDragOver = (e: React.DragEvent, col: TrackerStatus) => {
     e.preventDefault()
     setDragOverCol(col)
   }
 
-  const handleDrop = useCallback((col) => {
-    if (draggedApp && draggedApp.status !== col) {
-      moveApplication(draggedApp.id, col)
-      // Confetti burst for Offer column!
-      if (col === 'Offer') {
-        confetti({
-          particleCount: 100,
-          spread: 70,
-          origin: { y: 0.6 },
-          colors: ['#00ff88', '#4fc3f7', '#fbbf24'],
-        })
+  const handleDrop = useCallback(
+    (col: TrackerStatus) => {
+      if (draggedApp && draggedApp.status !== col) {
+        moveApplication(draggedApp.id, col)
+        // Confetti burst for Offer column!
+        if (col === 'Offer') {
+          confetti({
+            particleCount: 100,
+            spread: 70,
+            origin: { y: 0.6 },
+            colors: ['#00ff88', '#4fc3f7', '#fbbf24'],
+          })
+        }
       }
-    }
-    setDraggedApp(null)
-    setDragOverCol(null)
-  }, [draggedApp, moveApplication])
+      setDraggedApp(null)
+      setDragOverCol(null)
+    },
+    [draggedApp, moveApplication],
+  )
 
   return (
     <motion.div
@@ -100,15 +109,13 @@ export default function Tracker() {
                 <h3 className={`font-mono text-xs font-bold uppercase tracking-wider ${colors.text}`}>
                   {col}
                 </h3>
-                <span className="text-dark-muted text-[10px] font-mono ml-auto">
-                  {apps.length}
-                </span>
+                <span className="text-dark-muted text-[10px] font-mono ml-auto">{apps.length}</span>
               </div>
 
               {/* Cards */}
               <div className="space-y-2">
                 <AnimatePresence>
-                  {apps.map(app => (
+                  {apps.map((app) => (
                     <motion.div
                       key={app.id}
                       draggable
@@ -122,12 +129,8 @@ export default function Tracker() {
                     >
                       <div className="flex items-start justify-between">
                         <div>
-                          <p className="text-sm font-medium truncate">
-                            {app.jobs?.title || app.title || 'Unknown Role'}
-                          </p>
-                          <p className="text-[10px] text-dark-muted mt-0.5">
-                            {app.jobs?.company || app.company || 'Unknown'}
-                          </p>
+                          <p className="text-sm font-medium truncate">{app.title || 'Unknown Role'}</p>
+                          <p className="text-[10px] text-dark-muted mt-0.5">{app.company || 'Unknown'}</p>
                         </div>
                         <motion.button
                           onClick={() => removeApplication(app.id)}
@@ -138,9 +141,7 @@ export default function Tracker() {
                         </motion.button>
                       </div>
                       {app.notes && (
-                        <p className="text-[10px] text-dark-muted/60 mt-2 italic truncate">
-                          {app.notes}
-                        </p>
+                        <p className="text-[10px] text-dark-muted/60 mt-2 italic truncate">{app.notes}</p>
                       )}
                       <p className="text-[9px] text-dark-muted/40 font-mono mt-2">
                         {app.applied_date ? new Date(app.applied_date).toLocaleDateString() : ''}
@@ -165,8 +166,8 @@ export default function Tracker() {
         {showAddModal && (
           <AddApplicationModal
             jobs={allJobs}
-            onAdd={(jobId, notes) => {
-              addApplication(jobId, 'Applied', notes)
+            onAdd={(job, notes) => {
+              addApplication({ title: job.title, company: job.company, status: 'Applied', notes })
               setShowAddModal(false)
             }}
             onClose={() => setShowAddModal(false)}
@@ -178,15 +179,24 @@ export default function Tracker() {
 }
 
 /* ─── Add Application Modal ─────────────────────────── */
-function AddApplicationModal({ jobs, onAdd, onClose }) {
+interface AddApplicationModalProps {
+  jobs: Job[]
+  onAdd: (job: Job, notes: string) => void
+  onClose: () => void
+}
+
+function AddApplicationModal({ jobs, onAdd, onClose }: AddApplicationModalProps) {
   const [search, setSearch] = useState('')
-  const [selectedJob, setSelectedJob] = useState(null)
+  const [selectedJob, setSelectedJob] = useState<Job | null>(null)
   const [notes, setNotes] = useState('')
 
-  const filtered = jobs.filter(j =>
-    (j.title || '').toLowerCase().includes(search.toLowerCase()) ||
-    (j.company || '').toLowerCase().includes(search.toLowerCase())
-  ).slice(0, 10)
+  const filtered = jobs
+    .filter(
+      (j) =>
+        (j.title || '').toLowerCase().includes(search.toLowerCase()) ||
+        (j.company || '').toLowerCase().includes(search.toLowerCase()),
+    )
+    .slice(0, 10)
 
   return (
     <>
@@ -212,13 +222,13 @@ function AddApplicationModal({ jobs, onAdd, onClose }) {
               <input
                 type="text"
                 value={search}
-                onChange={e => setSearch(e.target.value)}
+                onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search for a job to track..."
                 className="w-full px-3 py-2 bg-dark-bg border border-dark-border rounded-xl text-sm font-mono outline-none focus:border-accent/40 mb-3"
                 autoFocus
               />
               <div className="max-h-48 overflow-y-auto space-y-1">
-                {filtered.map(job => (
+                {filtered.map((job) => (
                   <button
                     key={job.id}
                     onClick={() => setSelectedJob(job)}
@@ -238,7 +248,7 @@ function AddApplicationModal({ jobs, onAdd, onClose }) {
               </div>
               <textarea
                 value={notes}
-                onChange={e => setNotes(e.target.value)}
+                onChange={(e) => setNotes(e.target.value)}
                 placeholder="Notes (optional)..."
                 rows={3}
                 className="w-full px-3 py-2 bg-dark-bg border border-dark-border rounded-xl text-sm font-mono outline-none focus:border-accent/40 resize-none mb-3"
@@ -251,7 +261,7 @@ function AddApplicationModal({ jobs, onAdd, onClose }) {
                   Back
                 </button>
                 <button
-                  onClick={() => onAdd(selectedJob.id, notes)}
+                  onClick={() => onAdd(selectedJob, notes)}
                   className="flex-1 py-2 rounded-xl bg-accent text-dark-bg text-sm font-mono font-bold hover:bg-accent-dim transition-colors"
                 >
                   Track It
