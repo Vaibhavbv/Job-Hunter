@@ -1,38 +1,51 @@
 import { useState, useMemo, useCallback } from 'react'
-import { motion, AnimatePresence } from 'motion/react'
+import { motion, AnimatePresence, type Variants } from 'motion/react'
 import { useNavigate } from 'react-router-dom'
 import { useSession } from '../hooks/useSession'
 import { useEvaluations } from '../hooks/useEvaluations'
 import ResumeRewriteModal from '../components/ResumeRewriteModal'
 import CreditBadge from '../components/CreditBadge'
+import type { Evaluation, Recommendation } from '../types/database'
 
-const container = {
+const container: Variants = {
   hidden: { opacity: 0 },
   show: {
     opacity: 1,
     transition: { staggerChildren: 0.08, delayChildren: 0.1 },
   },
 }
-const item = {
+const item: Variants = {
   hidden: { opacity: 0, y: 20 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.4, ease: [0.16, 1, 0.3, 1] } },
+  show: { opacity: 1, y: 0, transition: { duration: 0.4, ease: [0.16, 1, 0.3, 1] as const } },
 }
 
-const GRADE_COLORS = {
-  'A+': '#00ff88', 'A': '#34d399', 'B+': '#60a5fa',
-  'B': '#818cf8', 'C': '#fbbf24', 'D': '#f97316', 'F': '#ef4444',
+const GRADE_COLORS: Record<string, string> = {
+  'A+': '#00ff88',
+  A: '#34d399',
+  'B+': '#60a5fa',
+  B: '#818cf8',
+  C: '#fbbf24',
+  D: '#f97316',
+  F: '#ef4444',
 }
 
-const ARCHETYPE_STYLES = {
-  'Dream Job':    { bg: 'bg-emerald-500/10', border: 'border-emerald-500/20', text: 'text-emerald-400', icon: '🌟' },
+interface ArchetypeStyle {
+  bg: string
+  border: string
+  text: string
+  icon: string
+}
+
+const ARCHETYPE_STYLES: Record<string, ArchetypeStyle> = {
+  'Dream Job': { bg: 'bg-emerald-500/10', border: 'border-emerald-500/20', text: 'text-emerald-400', icon: '🌟' },
   'Strong Match': { bg: 'bg-green-500/10', border: 'border-green-500/20', text: 'text-green-400', icon: '✅' },
   'Worth Trying': { bg: 'bg-blue-500/10', border: 'border-blue-500/20', text: 'text-blue-400', icon: '🎯' },
-  'Stretch':      { bg: 'bg-amber-500/10', border: 'border-amber-500/20', text: 'text-amber-400', icon: '⚡' },
-  'Mismatch':     { bg: 'bg-red-500/10', border: 'border-red-500/20', text: 'text-red-400', icon: '❌' },
-  'Dealbreaker':  { bg: 'bg-gray-500/10', border: 'border-gray-500/20', text: 'text-gray-400', icon: '🚫' },
+  Stretch: { bg: 'bg-amber-500/10', border: 'border-amber-500/20', text: 'text-amber-400', icon: '⚡' },
+  Mismatch: { bg: 'bg-red-500/10', border: 'border-red-500/20', text: 'text-red-400', icon: '❌' },
+  Dealbreaker: { bg: 'bg-gray-500/10', border: 'border-gray-500/20', text: 'text-gray-400', icon: '🚫' },
 }
 
-const RECOMMENDATION_TABS = [
+const RECOMMENDATION_TABS: { key: 'all' | Recommendation; label: string; icon: string }[] = [
   { key: 'all', label: 'All', icon: '📊' },
   { key: 'Apply Now', label: 'Apply Now', icon: '🚀' },
   { key: 'Worth Trying', label: 'Worth Trying', icon: '🎯' },
@@ -40,35 +53,49 @@ const RECOMMENDATION_TABS = [
   { key: 'Skip', label: 'Skip', icon: '⏭️' },
 ]
 
+const SORT_OPTIONS: { key: 'score' | 'grade'; label: string }[] = [
+  { key: 'score', label: 'Score' },
+  { key: 'grade', label: 'Grade' },
+]
+
 export default function AIDashboard() {
   const navigate = useNavigate()
   const { sessionId, jobTitles, error: sessionError, clearSession } = useSession()
-  const { evaluations, loading: evalsLoading, evaluating, stats, evaluate, progress, pendingCount } = useEvaluations()
+  const {
+    evaluations,
+    loading: evalsLoading,
+    evaluating,
+    stats,
+    evaluate,
+    progress,
+    pendingCount,
+  } = useEvaluations()
 
-  const [selectedEval, setSelectedEval] = useState(null)
-  const [activeTab, setActiveTab] = useState('all')
-  const [sortBy, setSortBy] = useState('score') // 'score' | 'grade' | 'archetype'
+  const [selectedEval, setSelectedEval] = useState<Evaluation | null>(null)
+  const [activeTab, setActiveTab] = useState<'all' | Recommendation>('all')
+  const [sortBy, setSortBy] = useState<'score' | 'grade'>('score')
 
   // Filter evaluations by recommendation tab
   const filteredEvals = useMemo(() => {
     let filtered = [...evaluations]
     if (activeTab !== 'all') {
-      filtered = filtered.filter(e => e.recommendation === activeTab)
+      filtered = filtered.filter((e) => e.recommendation === activeTab)
     }
     // Sort
     if (sortBy === 'score') {
       filtered.sort((a, b) => (b.overall_score || 0) - (a.overall_score || 0))
     } else if (sortBy === 'grade') {
       const order = ['A+', 'A', 'B+', 'B', 'C', 'D', 'F']
-      filtered.sort((a, b) => order.indexOf(a.grade) - order.indexOf(b.grade))
+      filtered.sort((a, b) => order.indexOf(a.grade || '') - order.indexOf(b.grade || ''))
     }
     return filtered
   }, [evaluations, activeTab, sortBy])
 
   // Tab counts
   const tabCounts = useMemo(() => {
-    const counts = { all: evaluations.length }
+    const counts: Record<string, number> = { all: evaluations.length }
     for (const e of evaluations) {
+      if (!e.recommendation) continue
       counts[e.recommendation] = (counts[e.recommendation] || 0) + 1
     }
     return counts
@@ -102,9 +129,7 @@ export default function AIDashboard() {
           </h1>
           <p className="text-dark-muted text-xs font-mono mt-1">
             5-dimension scoring · {evaluations.length} evaluated
-            {pendingCount > 0 && (
-              <span className="text-amber-400 ml-2">· {pendingCount} pending</span>
-            )}
+            {pendingCount > 0 && <span className="text-amber-400 ml-2">· {pendingCount} pending</span>}
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -157,9 +182,13 @@ export default function AIDashboard() {
       {stats.total > 0 && (
         <motion.div variants={item} className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-6">
           <MiniStat label="Evaluated" value={stats.total} accent />
-          <MiniStat label="Avg Score" value={stats.avgScore} color={stats.avgScore >= 60 ? '#00ff88' : stats.avgScore >= 40 ? '#fbbf24' : '#ef4444'} />
-          <MiniStat label="Apply Now" value={(tabCounts['Apply Now'] || 0)} color="#00ff88" />
-          <MiniStat label="Worth Trying" value={(tabCounts['Worth Trying'] || 0)} color="#60a5fa" />
+          <MiniStat
+            label="Avg Score"
+            value={stats.avgScore}
+            color={stats.avgScore >= 60 ? '#00ff88' : stats.avgScore >= 40 ? '#fbbf24' : '#ef4444'}
+          />
+          <MiniStat label="Apply Now" value={tabCounts['Apply Now'] || 0} color="#00ff88" />
+          <MiniStat label="Worth Trying" value={tabCounts['Worth Trying'] || 0} color="#60a5fa" />
           <MiniStat label="Gate Fails" value={stats.gateFailCount} color="#ef4444" />
         </motion.div>
       )}
@@ -186,9 +215,7 @@ export default function AIDashboard() {
           animate={{ opacity: 1, y: 0 }}
         >
           <div className="flex items-center justify-between mb-3">
-            <h3 className="font-display font-bold text-base">
-              Batch Evaluation in Progress
-            </h3>
+            <h3 className="font-display font-bold text-base">Batch Evaluation in Progress</h3>
             <span className="text-xs font-mono text-accent">
               {progress.current}/{progress.total || '?'}
             </span>
@@ -199,9 +226,8 @@ export default function AIDashboard() {
               className="h-full rounded-full bg-gradient-to-r from-accent to-emerald-400"
               initial={{ width: 0 }}
               animate={{
-                width: progress.total > 0
-                  ? `${Math.min((progress.current / progress.total) * 100, 100)}%`
-                  : '30%'
+                width:
+                  progress.total > 0 ? `${Math.min((progress.current / progress.total) * 100, 100)}%` : '30%',
               }}
               transition={{ duration: 0.5, ease: 'easeOut' }}
             />
@@ -215,7 +241,7 @@ export default function AIDashboard() {
       {/* ─── FILTER TABS ─── */}
       {!evaluating && evaluations.length > 0 && (
         <motion.div variants={item} className="flex items-center gap-2 mb-6 flex-wrap">
-          {RECOMMENDATION_TABS.map(tab => (
+          {RECOMMENDATION_TABS.map((tab) => (
             <motion.button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
@@ -229,9 +255,11 @@ export default function AIDashboard() {
               <span>{tab.icon}</span>
               {tab.label}
               {tabCounts[tab.key] !== undefined && (
-                <span className={`text-[9px] font-bold ml-1 px-1.5 py-0.5 rounded ${
-                  activeTab === tab.key ? 'bg-accent/20' : 'bg-dark-border/50'
-                }`}>
+                <span
+                  className={`text-[9px] font-bold ml-1 px-1.5 py-0.5 rounded ${
+                    activeTab === tab.key ? 'bg-accent/20' : 'bg-dark-border/50'
+                  }`}
+                >
                   {tabCounts[tab.key] || 0}
                 </span>
               )}
@@ -241,7 +269,7 @@ export default function AIDashboard() {
           {/* Sort toggle */}
           <div className="ml-auto flex items-center gap-1">
             <span className="text-[10px] font-mono text-dark-muted mr-1">Sort:</span>
-            {[{ key: 'score', label: 'Score' }, { key: 'grade', label: 'Grade' }].map(s => (
+            {SORT_OPTIONS.map((s) => (
               <button
                 key={s.key}
                 onClick={() => setSortBy(s.key)}
@@ -291,11 +319,7 @@ export default function AIDashboard() {
           animate="show"
         >
           {filteredEvals.map((evaluation) => (
-            <EvaluationCard
-              key={evaluation.id}
-              evaluation={evaluation}
-              onClick={() => setSelectedEval(evaluation)}
-            />
+            <EvaluationCard key={evaluation.id} evaluation={evaluation} onClick={() => setSelectedEval(evaluation)} />
           ))}
         </motion.div>
       )}
@@ -306,17 +330,22 @@ export default function AIDashboard() {
           <ResumeRewriteModal
             job={{
               id: selectedEval.jobs.id,
+              session_id: sessionId || '',
               title: selectedEval.jobs.title,
               company: selectedEval.jobs.company,
               location: selectedEval.jobs.location,
               salary: selectedEval.jobs.salary,
-              url: selectedEval.jobs.url,
-              jd_text: selectedEval.jobs.description,
-              platform: selectedEval.jobs.platform,
-              // Pass evaluation data for display
-              evaluation: selectedEval,
+              experience: null,
+              jd_text: null,
+              relevancy_score: selectedEval.overall_score,
+              salary_match: null,
+              experience_match: null,
+              reasons: selectedEval.reasons,
+              summary: selectedEval.summary,
+              portal_url: selectedEval.jobs.url,
+              fetched_at: selectedEval.evaluated_at,
             }}
-            sessionId={sessionId}
+            sessionId={sessionId || ''}
             onClose={() => setSelectedEval(null)}
           />
         )}
@@ -326,19 +355,27 @@ export default function AIDashboard() {
 }
 
 /* ─── Mini Stat ─── */
-function MiniStat({ label, value, color, accent }) {
+interface MiniStatProps {
+  label: string
+  value: number
+  color?: string
+  accent?: boolean
+}
+
+function MiniStat({ label, value, color, accent }: MiniStatProps) {
   return (
     <motion.div
       className="bg-dark-card border border-dark-border rounded-2xl p-4 text-center group hover:border-accent/20 transition-colors"
       whileHover={{ y: -2 }}
     >
-      <span
-        className="font-mono font-bold text-2xl block"
-        style={color ? { color } : undefined}
-      >
+      <span className="font-mono font-bold text-2xl block" style={color ? { color } : undefined}>
         {value}
       </span>
-      <span className={`text-[10px] font-mono uppercase tracking-wider mt-1 block ${accent ? 'text-accent' : 'text-dark-muted'}`}>
+      <span
+        className={`text-[10px] font-mono uppercase tracking-wider mt-1 block ${
+          accent ? 'text-accent' : 'text-dark-muted'
+        }`}
+      >
         {label}
       </span>
     </motion.div>
@@ -346,12 +383,17 @@ function MiniStat({ label, value, color, accent }) {
 }
 
 /* ─── Evaluation Card ─── */
-function EvaluationCard({ evaluation, onClick }) {
+interface EvaluationCardProps {
+  evaluation: Evaluation
+  onClick: () => void
+}
+
+function EvaluationCard({ evaluation, onClick }: EvaluationCardProps) {
   const job = evaluation.jobs
   if (!job) return null
 
-  const gradeColor = GRADE_COLORS[evaluation.grade] || '#8b8da3'
-  const archStyle = ARCHETYPE_STYLES[evaluation.archetype] || ARCHETYPE_STYLES['Mismatch']
+  const gradeColor = GRADE_COLORS[evaluation.grade || ''] || '#8b8da3'
+  const archStyle = ARCHETYPE_STYLES[evaluation.archetype || ''] || ARCHETYPE_STYLES['Mismatch']
   const reasons = Array.isArray(evaluation.reasons) ? evaluation.reasons : []
   const risks = Array.isArray(evaluation.risks) ? evaluation.risks : []
 
@@ -397,30 +439,32 @@ function EvaluationCard({ evaluation, onClick }) {
           {job.title}
         </h3>
         <p className="text-dark-muted text-xs mt-1 truncate">{job.company}</p>
-        {job.location && (
-          <p className="text-dark-muted/60 text-[11px] mt-0.5">📍 {job.location}</p>
-        )}
+        {job.location && <p className="text-dark-muted/60 text-[11px] mt-0.5">📍 {job.location}</p>}
       </div>
 
       {/* Archetype + Recommendation badges */}
       <div className="flex items-center gap-2 mt-3">
-        <span className={`text-[10px] font-mono font-semibold px-2 py-0.5 rounded-md border ${archStyle.bg} ${archStyle.border} ${archStyle.text}`}>
+        <span
+          className={`text-[10px] font-mono font-semibold px-2 py-0.5 rounded-md border ${archStyle.bg} ${archStyle.border} ${archStyle.text}`}
+        >
           {archStyle.icon} {evaluation.archetype}
         </span>
-        <span className={`text-[10px] font-mono px-2 py-0.5 rounded-md border ${
-          evaluation.recommendation === 'Apply Now'
-            ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-            : evaluation.recommendation === 'Worth Trying'
-            ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
-            : 'bg-gray-500/10 text-gray-400 border-gray-500/20'
-        }`}>
+        <span
+          className={`text-[10px] font-mono px-2 py-0.5 rounded-md border ${
+            evaluation.recommendation === 'Apply Now'
+              ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+              : evaluation.recommendation === 'Worth Trying'
+                ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
+                : 'bg-gray-500/10 text-gray-400 border-gray-500/20'
+          }`}
+        >
           {evaluation.recommendation}
         </span>
       </div>
 
       {/* Dimension mini bars */}
       <div className="mt-3 space-y-1.5">
-        {dimensions.map(dim => (
+        {dimensions.map((dim) => (
           <div key={dim.key} className="flex items-center gap-2">
             <span className="text-[9px] font-mono text-dark-muted w-16 shrink-0">{dim.label}</span>
             <div className="flex-1 h-1.5 bg-dark-bg rounded-full overflow-hidden">
@@ -439,9 +483,7 @@ function EvaluationCard({ evaluation, onClick }) {
 
       {/* AI Summary */}
       {evaluation.summary && (
-        <p className="text-[11px] text-gray-400 mt-3 leading-relaxed line-clamp-2">
-          {evaluation.summary}
-        </p>
+        <p className="text-[11px] text-gray-400 mt-3 leading-relaxed line-clamp-2">{evaluation.summary}</p>
       )}
 
       {/* Reasons preview */}
