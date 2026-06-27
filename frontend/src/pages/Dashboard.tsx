@@ -1,10 +1,24 @@
-import { useMemo } from 'react'
+import { useMemo, type ReactNode } from 'react'
 import { motion } from 'motion/react'
 import { useJobs } from '../hooks/useJobs'
 import { useEvaluations } from '../hooks/useEvaluations'
 import AnimatedCounter from '../components/AnimatedCounter'
 import { SkeletonStat } from '../components/SkeletonLoader'
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, RadarChart, PolarGrid, PolarAngleAxis, Radar, BarChart, Bar, XAxis, YAxis } from 'recharts'
+import {
+  PieChart,
+  Pie,
+  Cell,
+  ResponsiveContainer,
+  Tooltip,
+  RadarChart,
+  PolarGrid,
+  PolarAngleAxis,
+  Radar,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+} from 'recharts'
 import { hashColor, initials } from '../utils/format'
 
 const container = {
@@ -16,32 +30,32 @@ const container = {
 }
 const item = {
   hidden: { opacity: 0, y: 20 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.4, ease: [0.16, 1, 0.3, 1] } },
+  show: { opacity: 1, y: 0, transition: { duration: 0.4, ease: [0.16, 1, 0.3, 1] as const } },
 }
 
-const PLATFORM_COLORS = {
+const PLATFORM_COLORS: Record<string, string> = {
   LinkedIn: '#0a66c2',
-  Naukri:   '#16a34a',
-  Indeed:   '#d97706',
+  Naukri: '#16a34a',
+  Indeed: '#d97706',
 }
 
-const GRADE_COLORS = {
+const GRADE_COLORS: Record<string, string> = {
   'A+': '#00ff88',
-  'A':  '#34d399',
+  A: '#34d399',
   'B+': '#60a5fa',
-  'B':  '#818cf8',
-  'C':  '#fbbf24',
-  'D':  '#f97316',
-  'F':  '#ef4444',
+  B: '#818cf8',
+  C: '#fbbf24',
+  D: '#f97316',
+  F: '#ef4444',
 }
 
-const ARCHETYPE_COLORS = {
-  'Dream Job':    '#00ff88',
+const ARCHETYPE_COLORS: Record<string, string> = {
+  'Dream Job': '#00ff88',
   'Strong Match': '#34d399',
   'Worth Trying': '#60a5fa',
-  'Stretch':      '#fbbf24',
-  'Mismatch':     '#ef4444',
-  'Dealbreaker':  '#6b7280',
+  Stretch: '#fbbf24',
+  Mismatch: '#ef4444',
+  Dealbreaker: '#6b7280',
 }
 
 const chartTooltipStyle = {
@@ -52,6 +66,14 @@ const chartTooltipStyle = {
   fontFamily: 'JetBrains Mono',
 }
 
+const DIMENSION_KEYS = [
+  { key: 'technical_fit', label: 'Technical' },
+  { key: 'seniority_fit', label: 'Seniority' },
+  { key: 'domain_fit', label: 'Domain' },
+  { key: 'salary_fit', label: 'Salary' },
+  { key: 'location_fit', label: 'Location' },
+] as const
+
 export default function Dashboard() {
   const { allJobs, loading: jobsLoading, stats: jobStats } = useJobs()
   const { evaluations, loading: evalsLoading, stats: evalStats } = useEvaluations()
@@ -59,16 +81,20 @@ export default function Dashboard() {
   const loading = jobsLoading || evalsLoading
 
   // Donut chart data — platform mix
-  const platformPieData = useMemo(() => [
-    { name: 'LinkedIn', value: jobStats.linkedin, color: PLATFORM_COLORS.LinkedIn },
-    { name: 'Naukri', value: jobStats.naukri, color: PLATFORM_COLORS.Naukri },
-    { name: 'Indeed', value: jobStats.indeed, color: PLATFORM_COLORS.Indeed },
-  ].filter(d => d.value > 0), [jobStats])
+  const platformPieData = useMemo(
+    () =>
+      [
+        { name: 'LinkedIn', value: jobStats.linkedin, color: PLATFORM_COLORS.LinkedIn },
+        { name: 'Naukri', value: jobStats.naukri, color: PLATFORM_COLORS.Naukri },
+        { name: 'Indeed', value: jobStats.indeed, color: PLATFORM_COLORS.Indeed },
+      ].filter((d) => d.value > 0),
+    [jobStats],
+  )
 
   // Grade distribution for bar chart
   const gradeChartData = useMemo(() => {
     const order = ['A+', 'A', 'B+', 'B', 'C', 'D', 'F']
-    return order.map(grade => ({
+    return order.map((grade) => ({
       grade,
       count: evalStats.gradeDistribution[grade] || 0,
       fill: GRADE_COLORS[grade],
@@ -85,12 +111,10 @@ export default function Dashboard() {
   // Average dimension scores for radar chart
   const dimensionRadar = useMemo(() => {
     if (evaluations.length === 0) return []
-    const dims = ['technical_fit', 'seniority_fit', 'domain_fit', 'salary_fit', 'location_fit']
-    const labels = ['Technical', 'Seniority', 'Domain', 'Salary', 'Location']
-    return dims.map((d, i) => {
-      const scores = evaluations.map(e => e[d]).filter(Boolean)
+    return DIMENSION_KEYS.map((d) => {
+      const scores = evaluations.map((e) => e[d.key]).filter((v): v is number => Boolean(v))
       const avg = scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0
-      return { dimension: labels[i], score: avg }
+      return { dimension: d.label, score: avg }
     })
   }, [evaluations])
 
@@ -102,8 +126,11 @@ export default function Dashboard() {
     if (!jobStats.lastUpdated) return null
     const d = new Date(jobStats.lastUpdated)
     return d.toLocaleString('en-IN', {
-      day: 'numeric', month: 'short', year: 'numeric',
-      hour: '2-digit', minute: '2-digit',
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
     })
   }, [jobStats.lastUpdated])
 
@@ -135,14 +162,27 @@ export default function Dashboard() {
       {/* ─── STAT CARDS ─── */}
       {loading ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-8">
-          {Array.from({ length: 6 }, (_, i) => <SkeletonStat key={i} />)}
+          {Array.from({ length: 6 }, (_, i) => (
+            <SkeletonStat key={i} />
+          ))}
         </div>
       ) : (
         <motion.div variants={item} className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-8">
           <StatCard label="Jobs Scraped" value={jobStats.total} accent />
           <StatCard label="Evaluated" value={evalStats.total} color="#818cf8" />
-          <StatCard label="Avg Score" value={evalStats.avgScore} color={evalStats.avgScore >= 60 ? '#00ff88' : evalStats.avgScore >= 40 ? '#fbbf24' : '#ef4444'} />
-          <StatCard label="Apply Now" value={(evalStats.archetypeDistribution?.['Dream Job'] || 0) + (evalStats.archetypeDistribution?.['Strong Match'] || 0)} color="#00ff88" />
+          <StatCard
+            label="Avg Score"
+            value={evalStats.avgScore}
+            color={evalStats.avgScore >= 60 ? '#00ff88' : evalStats.avgScore >= 40 ? '#fbbf24' : '#ef4444'}
+          />
+          <StatCard
+            label="Apply Now"
+            value={
+              (evalStats.archetypeDistribution?.['Dream Job'] || 0) +
+              (evalStats.archetypeDistribution?.['Strong Match'] || 0)
+            }
+            color="#00ff88"
+          />
           <StatCard label="Gate Fails" value={evalStats.gateFailCount} color="#ef4444" />
           <StatCard label="Added Today" value={jobStats.today} />
         </motion.div>
@@ -155,11 +195,14 @@ export default function Dashboard() {
           <h3 className="font-mono text-xs text-dark-muted uppercase tracking-wider mb-4">
             Grade Distribution
           </h3>
-          {gradeChartData.some(d => d.count > 0) ? (
+          {gradeChartData.some((d) => d.count > 0) ? (
             <div className="h-48">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={gradeChartData}>
-                  <XAxis dataKey="grade" tick={{ fontSize: 11, fill: '#8b8da3', fontFamily: 'JetBrains Mono' }} />
+                  <XAxis
+                    dataKey="grade"
+                    tick={{ fontSize: 11, fill: '#8b8da3', fontFamily: 'JetBrains Mono' }}
+                  />
                   <YAxis tick={{ fontSize: 10, fill: '#8b8da3' }} allowDecimals={false} />
                   <Tooltip contentStyle={chartTooltipStyle} />
                   <Bar dataKey="count" radius={[6, 6, 0, 0]} animationDuration={800}>
@@ -237,7 +280,7 @@ export default function Dashboard() {
                 </ResponsiveContainer>
               </div>
               <div className="flex flex-wrap justify-center gap-3 mt-2">
-                {(archetypePieData.length > 0 ? archetypePieData : platformPieData).map(d => (
+                {(archetypePieData.length > 0 ? archetypePieData : platformPieData).map((d) => (
                   <div key={d.name} className="flex items-center gap-1.5">
                     <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: d.color }} />
                     <span className="text-[10px] font-mono text-dark-muted">{d.name}</span>
@@ -255,9 +298,7 @@ export default function Dashboard() {
       <motion.div variants={item} className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
         {/* Top Evaluated Jobs */}
         <div className="bg-dark-card border border-dark-border rounded-2xl p-5">
-          <h3 className="font-mono text-xs text-dark-muted uppercase tracking-wider mb-4">
-            🏆 Top Matches
-          </h3>
+          <h3 className="font-mono text-xs text-dark-muted uppercase tracking-wider mb-4">🏆 Top Matches</h3>
           <div className="space-y-2 max-h-[340px] overflow-y-auto pr-1">
             {topJobs.length === 0 ? (
               <p className="text-dark-muted text-sm text-center py-8 font-mono">
@@ -270,7 +311,7 @@ export default function Dashboard() {
                 return (
                   <motion.a
                     key={evaluation.id}
-                    href={job.url}
+                    href={job.url || undefined}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-dark-hover transition-colors group"
@@ -279,9 +320,7 @@ export default function Dashboard() {
                     transition={{ delay: i * 0.05 }}
                   >
                     {/* Rank */}
-                    <span className="text-accent font-mono font-bold text-sm w-5 shrink-0">
-                      #{i + 1}
-                    </span>
+                    <span className="text-accent font-mono font-bold text-sm w-5 shrink-0">#{i + 1}</span>
 
                     {/* Company avatar */}
                     <div
@@ -305,13 +344,13 @@ export default function Dashboard() {
                     <div className="text-right shrink-0">
                       <span
                         className="font-mono font-bold text-sm"
-                        style={{ color: GRADE_COLORS[evaluation.grade] }}
+                        style={{ color: GRADE_COLORS[evaluation.grade || ''] }}
                       >
                         {evaluation.overall_score}
                       </span>
                       <p
                         className="text-[9px] font-mono font-bold uppercase"
-                        style={{ color: GRADE_COLORS[evaluation.grade] }}
+                        style={{ color: GRADE_COLORS[evaluation.grade || ''] }}
                       >
                         {evaluation.grade}
                       </p>
@@ -325,21 +364,17 @@ export default function Dashboard() {
 
         {/* Latest Scraped Jobs */}
         <div className="bg-dark-card border border-dark-border rounded-2xl p-5">
-          <h3 className="font-mono text-xs text-dark-muted uppercase tracking-wider mb-4">
-            Latest Intercepts
-          </h3>
+          <h3 className="font-mono text-xs text-dark-muted uppercase tracking-wider mb-4">Latest Intercepts</h3>
           <div className="space-y-2 max-h-[340px] overflow-y-auto pr-1">
             {loading ? (
-              Array.from({ length: 5 }, (_, i) => (
-                <div key={i} className="h-14 skeleton rounded-xl" />
-              ))
+              Array.from({ length: 5 }, (_, i) => <div key={i} className="h-14 skeleton rounded-xl" />)
             ) : allJobs.length === 0 ? (
               <p className="text-dark-muted text-sm text-center py-8">No jobs yet</p>
             ) : (
               allJobs.slice(0, 10).map((job, i) => (
                 <motion.a
                   key={job.id || i}
-                  href={job.url}
+                  href={job.url || undefined}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-dark-hover transition-colors group"
@@ -375,7 +410,14 @@ export default function Dashboard() {
 }
 
 /* ─── Stat Card ─── */
-function StatCard({ label, value, color, accent }) {
+interface StatCardProps {
+  label: string
+  value: number
+  color?: string
+  accent?: boolean
+}
+
+function StatCard({ label, value, color, accent }: StatCardProps) {
   return (
     <motion.div
       className="bg-dark-card border border-dark-border rounded-2xl p-5 text-center group hover:border-accent/20 transition-colors"
@@ -386,7 +428,9 @@ function StatCard({ label, value, color, accent }) {
         className="font-mono font-bold text-2xl block"
         style={color ? { color } : undefined}
       />
-      <span className={`text-[10px] font-mono uppercase tracking-wider mt-1 block ${accent ? 'text-accent' : 'text-dark-muted'}`}>
+      <span
+        className={`text-[10px] font-mono uppercase tracking-wider mt-1 block ${accent ? 'text-accent' : 'text-dark-muted'}`}
+      >
         {label}
       </span>
     </motion.div>
@@ -394,10 +438,8 @@ function StatCard({ label, value, color, accent }) {
 }
 
 /* ─── Empty Chart Placeholder ─── */
-function EmptyChart({ message }) {
+function EmptyChart({ message }: { message: ReactNode }) {
   return (
-    <div className="h-48 flex items-center justify-center text-dark-muted text-sm font-mono">
-      {message}
-    </div>
+    <div className="h-48 flex items-center justify-center text-dark-muted text-sm font-mono">{message}</div>
   )
 }

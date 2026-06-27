@@ -2,11 +2,22 @@ import { useMemo } from 'react'
 import { motion } from 'motion/react'
 import { useJobs } from '../hooks/useJobs'
 import { useEvaluations } from '../hooks/useEvaluations'
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, CartesianGrid, Cell } from 'recharts'
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  CartesianGrid,
+  Cell,
+} from 'recharts'
 
 const item = {
   hidden: { opacity: 0, y: 20 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: [0.16, 1, 0.3, 1] } },
+  show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: [0.16, 1, 0.3, 1] as const } },
 }
 
 const chartTooltipStyle = {
@@ -17,6 +28,14 @@ const chartTooltipStyle = {
   fontFamily: 'JetBrains Mono',
 }
 
+const DIMENSION_KEYS = [
+  { key: 'technical_fit', label: 'Technical' },
+  { key: 'seniority_fit', label: 'Seniority' },
+  { key: 'domain_fit', label: 'Domain' },
+  { key: 'salary_fit', label: 'Salary' },
+  { key: 'location_fit', label: 'Location' },
+] as const
+
 export default function Analytics() {
   const { allJobs, loading: jobsLoading } = useJobs()
   const { evaluations, loading: evalsLoading } = useEvaluations()
@@ -25,8 +44,8 @@ export default function Analytics() {
 
   // Jobs over time (by posted_date)
   const timelineData = useMemo(() => {
-    const byDate = {}
-    allJobs.forEach(j => {
+    const byDate: Record<string, number> = {}
+    allJobs.forEach((j) => {
       const d = j.posted_date || 'unknown'
       byDate[d] = (byDate[d] || 0) + 1
     })
@@ -39,8 +58,8 @@ export default function Analytics() {
 
   // Top companies
   const topCompanies = useMemo(() => {
-    const counts = {}
-    allJobs.forEach(j => {
+    const counts: Record<string, number> = {}
+    allJobs.forEach((j) => {
       const c = j.company || 'Unknown'
       counts[c] = (counts[c] || 0) + 1
     })
@@ -52,8 +71,8 @@ export default function Analytics() {
 
   // Top roles
   const topRoles = useMemo(() => {
-    const counts = {}
-    allJobs.forEach(j => {
+    const counts: Record<string, number> = {}
+    allJobs.forEach((j) => {
       const r = j.role_type || 'Unknown'
       counts[r] = (counts[r] || 0) + 1
     })
@@ -70,13 +89,13 @@ export default function Analytics() {
       count: 0,
       mid: i * 10 + 5,
     }))
-    evaluations.forEach(e => {
+    evaluations.forEach((e) => {
       if (e.overall_score != null) {
         const idx = Math.min(Math.floor(e.overall_score / 10), 9)
         buckets[idx].count++
       }
     })
-    return buckets.map(b => ({
+    return buckets.map((b) => ({
       ...b,
       fill: b.mid >= 70 ? '#00ff88' : b.mid >= 50 ? '#60a5fa' : b.mid >= 30 ? '#fbbf24' : '#ef4444',
     }))
@@ -86,9 +105,9 @@ export default function Analytics() {
   const funnelData = useMemo(() => {
     const total = allJobs.length
     const evaluated = evaluations.length
-    const passed = evaluations.filter(e => !e.gate_fail).length
-    const applyNow = evaluations.filter(e => e.recommendation === 'Apply Now').length
-    const worthTrying = evaluations.filter(e => e.recommendation === 'Worth Trying').length
+    const passed = evaluations.filter((e) => !e.gate_fail).length
+    const applyNow = evaluations.filter((e) => e.recommendation === 'Apply Now').length
+    const worthTrying = evaluations.filter((e) => e.recommendation === 'Worth Trying').length
 
     return [
       { stage: 'Scraped', count: total, fill: '#8b8da3' },
@@ -102,31 +121,26 @@ export default function Analytics() {
   // Dimension averages comparison
   const dimensionComparison = useMemo(() => {
     if (evaluations.length === 0) return []
-    const dims = [
-      { key: 'technical_fit', label: 'Technical' },
-      { key: 'seniority_fit', label: 'Seniority' },
-      { key: 'domain_fit', label: 'Domain' },
-      { key: 'salary_fit', label: 'Salary' },
-      { key: 'location_fit', label: 'Location' },
-    ]
-    const topEvals = evaluations.filter(e => e.recommendation === 'Apply Now')
+    const topEvals = evaluations.filter((e) => e.recommendation === 'Apply Now')
     const allEvals = evaluations
 
-    return dims.map(d => {
-      const allScores = allEvals.map(e => e[d.key]).filter(Boolean)
-      const topScores = topEvals.map(e => e[d.key]).filter(Boolean)
+    return DIMENSION_KEYS.map((d) => {
+      const allScores = allEvals.map((e) => e[d.key]).filter((v): v is number => Boolean(v))
+      const topScores = topEvals.map((e) => e[d.key]).filter((v): v is number => Boolean(v))
       return {
         dimension: d.label,
-        'All Jobs': allScores.length > 0 ? Math.round(allScores.reduce((a, b) => a + b, 0) / allScores.length) : 0,
-        'Top Matches': topScores.length > 0 ? Math.round(topScores.reduce((a, b) => a + b, 0) / topScores.length) : 0,
+        'All Jobs':
+          allScores.length > 0 ? Math.round(allScores.reduce((a, b) => a + b, 0) / allScores.length) : 0,
+        'Top Matches':
+          topScores.length > 0 ? Math.round(topScores.reduce((a, b) => a + b, 0) / topScores.length) : 0,
       }
     })
   }, [evaluations])
 
   // Activity heatmap
   const heatmapData = useMemo(() => {
-    const byDate = {}
-    allJobs.forEach(j => {
+    const byDate: Record<string, number> = {}
+    allJobs.forEach((j) => {
       const d = j.posted_date
       if (d) byDate[d] = (byDate[d] || 0) + 1
     })
@@ -140,7 +154,7 @@ export default function Analytics() {
     return days
   }, [allJobs])
 
-  const maxHeatmap = useMemo(() => Math.max(...heatmapData.map(d => d.count), 1), [heatmapData])
+  const maxHeatmap = useMemo(() => Math.max(...heatmapData.map((d) => d.count), 1), [heatmapData])
 
   if (loading) {
     return (
@@ -181,7 +195,12 @@ export default function Analytics() {
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={funnelData} layout="vertical">
                 <XAxis type="number" tick={{ fontSize: 10, fill: '#8b8da3' }} />
-                <YAxis dataKey="stage" type="category" tick={{ fontSize: 11, fill: '#8b8da3', fontFamily: 'JetBrains Mono' }} width={100} />
+                <YAxis
+                  dataKey="stage"
+                  type="category"
+                  tick={{ fontSize: 11, fill: '#8b8da3', fontFamily: 'JetBrains Mono' }}
+                  width={100}
+                />
                 <Tooltip contentStyle={chartTooltipStyle} />
                 <Bar dataKey="count" radius={[0, 8, 8, 0]} animationDuration={1000}>
                   {funnelData.map((entry, i) => (
@@ -249,10 +268,7 @@ export default function Analytics() {
       )}
 
       {/* Activity Heatmap */}
-      <motion.div
-        variants={item}
-        className="bg-dark-card border border-dark-border rounded-2xl p-5 mb-6"
-      >
+      <motion.div variants={item} className="bg-dark-card border border-dark-border rounded-2xl p-5 mb-6">
         <h3 className="font-mono text-xs text-dark-muted uppercase tracking-wider mb-4">
           Scraping Activity · Last 90 Days
         </h3>
@@ -264,9 +280,8 @@ export default function Analytics() {
                 key={d.date}
                 className="w-3 h-3 rounded-sm"
                 style={{
-                  backgroundColor: d.count === 0
-                    ? '#1e1e2e'
-                    : `rgba(0, 255, 136, ${0.15 + intensity * 0.85})`,
+                  backgroundColor:
+                    d.count === 0 ? '#1e1e2e' : `rgba(0, 255, 136, ${0.15 + intensity * 0.85})`,
                 }}
                 title={`${d.date}: ${d.count} jobs`}
                 initial={{ opacity: 0, scale: 0 }}
@@ -278,7 +293,7 @@ export default function Analytics() {
         </div>
         <div className="flex items-center gap-1 mt-3 text-[9px] font-mono text-dark-muted">
           <span>Less</span>
-          {[0, 0.25, 0.5, 0.75, 1].map(v => (
+          {[0, 0.25, 0.5, 0.75, 1].map((v) => (
             <div
               key={v}
               className="w-3 h-3 rounded-sm"
@@ -318,9 +333,7 @@ export default function Analytics() {
 
         {/* Top Companies */}
         <motion.div variants={item} className="bg-dark-card border border-dark-border rounded-2xl p-5">
-          <h3 className="font-mono text-xs text-dark-muted uppercase tracking-wider mb-4">
-            Top Companies
-          </h3>
+          <h3 className="font-mono text-xs text-dark-muted uppercase tracking-wider mb-4">Top Companies</h3>
           <div className="h-56">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={topCompanies} layout="vertical">
@@ -336,13 +349,11 @@ export default function Analytics() {
 
       {/* Top Roles */}
       <motion.div variants={item} className="bg-dark-card border border-dark-border rounded-2xl p-5">
-        <h3 className="font-mono text-xs text-dark-muted uppercase tracking-wider mb-4">
-          Top Roles
-        </h3>
+        <h3 className="font-mono text-xs text-dark-muted uppercase tracking-wider mb-4">Top Roles</h3>
         <div className="h-56">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={topRoles}>
-              <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#8b8da3', angle: -20 }} />
+              <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#8b8da3' }} angle={-20} />
               <YAxis tick={{ fontSize: 10, fill: '#8b8da3' }} />
               <Tooltip contentStyle={chartTooltipStyle} />
               <Bar dataKey="count" fill="#00ff88" radius={[6, 6, 0, 0]} animationDuration={1000} />

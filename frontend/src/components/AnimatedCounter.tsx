@@ -5,6 +5,7 @@ interface AnimatedCounterProps {
   value: number
   duration?: number
   className?: string
+  style?: React.CSSProperties
 }
 
 /**
@@ -15,6 +16,7 @@ export default function AnimatedCounter({
   value,
   duration = 1.5,
   className = '',
+  style,
 }: AnimatedCounterProps) {
   const ref = useRef<HTMLSpanElement>(null)
   const isInView = useInView(ref, { once: true })
@@ -42,7 +44,7 @@ export default function AnimatedCounter({
   }, [springValue])
 
   return (
-    <span ref={ref} className={className}>
+    <span ref={ref} className={className} style={style}>
       0
     </span>
   )
