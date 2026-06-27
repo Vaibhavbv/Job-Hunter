@@ -1,199 +1,159 @@
-# 🎯 Vaibhav's Job Dashboard
+# Job Hunter
 
-A fully automated personal job dashboard that scrapes **40–50 fresh jobs daily** from LinkedIn, Naukri, and Indeed — stores them in Supabase — and displays them on a beautiful hosted website. **100% free** (or near-free).
+An AI-powered job search dashboard. A daily scraper pulls fresh listings from LinkedIn, Naukri, and Indeed into Supabase; a Gemini-backed evaluation engine scores each job against your resume and profile across 5 dimensions; and a React dashboard lets you browse, filter, track applications, and get an AI-tailored resume for any listing.
 
-| Component | Tech | Cost |
-|-----------|------|------|
-| Scraper | Python + Apify REST API | ~$1.50/mo (within Apify's free $5 credits) |
-| Database | Supabase (Postgres) | Free tier (500 MB) |
-| Scheduler | GitHub Actions cron | Free (public/private repos) |
-| Frontend | Vanilla HTML/CSS/JS | Free |
-| Hosting | Vercel | Free tier |
+## Tech Stack
 
-> ⚠️ **Cost Note:** The LinkedIn Apify actor (`curious_coder~linkedin-jobs-scraper`) is pay-per-result and ignores result-count limits — it scrapes ALL matches. We use Apify's `maxItems` API parameter to cap billing at 10 results per run.
+| Layer | Tech |
+|---|---|
+| Frontend | React 18 + Vite 5, React Router, TanStack Query, Tailwind CSS, Framer Motion |
+| Backend | Supabase (Postgres + Auth + Row-Level Security) + Deno Edge Functions |
+| AI | Google Gemini (resume parsing, resume rewriting, job evaluation/scoring) |
+| Scraper | Python 3.11 orchestrator + Apify actors (LinkedIn, Naukri, Indeed) |
+| Scheduler | GitHub Actions (daily cron) |
+| Hosting | Vercel (frontend) |
 
----
-
-## 📁 Project Structure
+## How It Works
 
 ```
-job-dashboard/
+GitHub Actions (daily cron)
+        │
+        ▼
+scraper/scraper.py  ──triggers──▶  Apify actors (LinkedIn / Naukri / Indeed)
+                                            │
+                                            ▼  webhook on completion
+                              supabase/functions/ingest-webhook
+                              (dedupes, ghost-job detection, writes to `jobs`)
+                                            │
+                                            ▼
+                                    Supabase Postgres
+                                            │
+                  ┌─────────────────────────┼─────────────────────────┐
+                  ▼                         ▼                         ▼
+        evaluate-jobs (Gemini)      parse-resume / rewrite-resume   fetch-jobs / check-credits
+        5-dim scoring per job       (Gemini, user-triggered)        (read APIs for the frontend)
+                  │                         │                         │
+                  └─────────────────────────┴─────────────────────────┘
+                                            │
+                                            ▼
+                              React frontend (Vite, deployed on Vercel)
+```
+
+The scraper itself is a thin orchestrator — it only queries `user_filters` and kicks off Apify runs. All extraction, deduplication, and persistence logic lives in the `ingest-webhook` Edge Function, which Apify calls when each run finishes.
+
+## Features
+
+- **Job board** — scraped listings with AI grade badges (A+–F), filtering, and search
+- **AI evaluation engine** — each job is scored across 5 dimensions (technical fit, seniority, domain, salary, location) against your profile/resume, producing a grade, an archetype (Dream Job, Strong Match, Worth Trying, Stretch, Mismatch, Dealbreaker), and a recommendation (Apply Now / Worth Trying / Maybe Later / Skip)
+- **Resume tools** — upload a PDF resume for AI parsing, then get an ATS-optimized, job-specific rewrite via Gemini
+- **Application tracker** — track status per job through your pipeline
+- **Dashboard & analytics** — grade distribution, 5-dimension radar chart, archetype breakdown, pipeline funnel (Scraped → Evaluated → Passed Gate → Worth Trying → Apply Now)
+- **Auth & profiles** — Supabase Auth with a candidate profile (skills, target roles, preferred locations, salary floor) that feeds the evaluation engine
+- **Command palette**, credit usage badge, toasts, and an error boundary with recovery
+
+See `CHANGELOG.md` for the version history of these features.
+
+## Project Structure
+
+```
+job-hunter/
+├── frontend/                  React 18 + Vite SPA
+│   ├── src/
+│   │   ├── components/        Reusable UI (JobCard, Navbar, CommandPalette, ErrorBoundary, ...)
+│   │   ├── hooks/              useAuth, useJobs, useEvaluations, useTracker, useSupabase, ...
+│   │   ├── pages/              JobsBoard, Dashboard, AIDashboard, Analytics, Tracker, ResumeUpload, Settings, AuthPage
+│   │   ├── services/api.js     Centralized Supabase Edge Function client
+│   │   ├── utils/               Shared formatting helpers (TypeScript)
+│   │   └── test/                Vitest setup
+│   ├── eslint.config.js, tsconfig.json, vite.config.js
+│   └── .env.example
+├── supabase/
+│   ├── functions/              Deno Edge Functions (see table below)
+│   ├── migrations/              SQL schema migrations, applied in filename order
+│   └── .env.example             Edge Function secrets reference
 ├── scraper/
-│   ├── scraper.py          ← Daily scraper script
-│   └── requirements.txt    ← Python dependencies
-├── frontend/
-│   └── index.html          ← Dashboard UI
-├── .github/
-│   └── workflows/
-│       └── daily.yml       ← GitHub Actions cron workflow
-├── supabase_schema.sql     ← One-time database setup
-└── README.md               ← This file
+│   ├── scraper.py               Daily orchestrator (queries filters, triggers Apify)
+│   ├── requirements.txt
+│   └── .env.example
+└── .github/workflows/
+    ├── daily.yml                 Scraper cron (2:30 AM UTC / 8:00 AM IST)
+    └── frontend-ci.yml           Lint, typecheck, test, build on every push/PR
 ```
 
----
+### Edge Functions
 
-## 🚀 Setup Guide
+| Function | Purpose |
+|---|---|
+| `fetch-jobs` | Reads jobs for the frontend, triggers new Apify scrape runs |
+| `ingest-webhook` | Apify webhook target — dedupes, detects ghost jobs, writes to `jobs` and `scan_history` |
+| `parse-resume` | Gemini-based resume PDF text → structured profile data |
+| `rewrite-resume` | Gemini-based ATS-optimized, job-tailored resume rewrite |
+| `evaluate-jobs` | 5-dimension Gemini scoring of jobs against the user's profile |
+| `score-jobs` | Lightweight scoring path (no full evaluation) |
+| `check-credits` | Reports remaining Apify/Gemini usage budget |
 
-Follow these steps in order. Total setup time: ~15 minutes.
+## Setup
 
-### Step 1: Supabase (Database)
+### 1. Supabase
 
-1. Go to [supabase.com](https://supabase.com) and create a free account
-2. Click **New Project** → give it a name (e.g., `job-dashboard`) → set a password → pick a region close to you → click **Create**
-3. Wait ~2 minutes for provisioning
-4. Go to **SQL Editor** (left sidebar) → click **New query**
-5. Copy-paste the entire contents of `supabase_schema.sql` into the editor → click **Run**
-6. You should see: `Success. No rows returned` — that means the table was created
-7. Now get your credentials:
-   - Go to **Settings** → **API** (left sidebar)
-   - Copy **Project URL** (looks like `https://abc123.supabase.co`)
-   - Copy **anon public** key (the long key under `Project API keys`)
-
-### Step 2: Apify (Scraping Engine)
-
-1. Go to [apify.com](https://apify.com) and create a free account
-2. You get **$5/month in free credits** — this project uses ~$1.50–$3.15/month
-3. Go to **Settings** → **Integrations** → copy your **API token**
-
-### Step 3: GitHub (Repository + Secrets)
-
-1. Create a **new repository** on GitHub (can be private)
-2. Push this entire project to the repository:
+1. Create a project at [supabase.com](https://supabase.com).
+2. In the SQL Editor, run each file in `supabase/migrations/` **in filename order** (they're timestamped). `supabase_schema.sql` at the repo root is the original v1 schema, kept for historical reference — new setups should use the migrations directory.
+3. Under Settings → API, copy the **Project URL**, **anon public key**, and **service_role key**.
+4. Deploy the Edge Functions with the [Supabase CLI](https://supabase.com/docs/guides/cli):
    ```bash
-   git init
-   git add .
-   git commit -m "Initial commit — Job Dashboard"
-   git branch -M main
-   git remote add origin https://github.com/YOUR_USERNAME/YOUR_REPO.git
-   git push -u origin main
+   supabase functions deploy fetch-jobs ingest-webhook parse-resume rewrite-resume evaluate-jobs score-jobs check-credits
    ```
-3. Go to your repo → **Settings** → **Secrets and variables** → **Actions** → **New repository secret**
-4. Add these 3 secrets:
-
-   | Secret Name | Value |
-   |-------------|-------|
-   | `APIFY_TOKEN` | Your Apify API token from Step 2 |
-   | `SUPABASE_URL` | Your Supabase Project URL (e.g., `https://abc123.supabase.co`) |
-   | `SUPABASE_KEY` | Your Supabase **service_role** key (for write access) |
-
-   > ⚠️ **Important:** Use the **service_role** key (not anon key) for the scraper, because it needs write access to insert rows.
-
-### Step 4: Frontend (Add Credentials)
-
-1. Open `frontend/index.html` in a text editor
-2. Find these two lines near the top of the `<script>` section:
-   ```js
-   const SUPABASE_URL  = "YOUR_SUPABASE_URL";
-   const SUPABASE_KEY  = "YOUR_SUPABASE_ANON_KEY";
-   ```
-3. Replace with your **actual Supabase URL** and **anon public key**:
-   ```js
-   const SUPABASE_URL  = "https://abc123.supabase.co";
-   const SUPABASE_KEY  = "eyJhbGci...your-anon-key...";
-   ```
-4. Commit and push:
+5. Set the Edge Function secrets (see `supabase/.env.example` for what each one is for):
    ```bash
-   git add frontend/index.html
-   git commit -m "Add Supabase credentials to frontend"
-   git push
+   supabase secrets set GEMINI_API_KEY=... APIFY_TOKEN=...
    ```
+   `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` are auto-injected by Supabase into every deployed function — you don't set those yourself.
 
-### Step 5: Deploy to Vercel (Free Hosting)
+### 2. Apify
 
-1. Go to [vercel.com](https://vercel.com) and sign in with GitHub
-2. Click **Add New** → **Project** → Import your job-dashboard repo
-3. In the configuration screen:
-   - **Root Directory:** Click **Edit** → type `frontend` → click **Continue**
-   - **Framework Preset:** Leave as `Other`
-4. Click **Deploy**
-5. In ~30 seconds you'll get a live URL like `https://your-project.vercel.app` 🎉
+1. Create a free account at [apify.com](https://apify.com) (the free tier's $5/month credit comfortably covers this project's usage).
+2. Copy your API token from Settings → Integrations.
 
-### Step 6: Run Scraper for the First Time
+### 3. Google Gemini
 
-1. Go to your GitHub repo → **Actions** tab
-2. Click **Daily Job Scraper** on the left
-3. Click **Run workflow** → **Run workflow** (green button)
-4. Wait ~3–5 minutes for it to complete
-5. Refresh your Vercel dashboard — you should see jobs appearing!
+1. Get an API key from [Google AI Studio](https://aistudio.google.com/apikey).
 
----
+### 4. GitHub Actions (scraper cron)
 
-## ⏰ How It Works
+Add repository secrets under Settings → Secrets and variables → Actions:
 
-```
-Daily at 8:00 AM IST
-        ↓
-GitHub Actions triggers scraper.py
-        ↓
-1. Naukri: 1 bulk call (50 results), filters for all 10 roles
-2. LinkedIn: 1 key role (Data Engineer), billing capped at 10 results via maxItems
-3. Indeed: 5 key roles × 5 results each
-        ↓
-Deduplicates results (URL → title|company → DB upsert)
-        ↓
-Dashboard fetches & displays data from Supabase
+| Secret | Value |
+|---|---|
+| `APIFY_TOKEN` | Your Apify API token |
+| `SUPABASE_URL` | Your Supabase Project URL |
+| `SUPABASE_KEY` | Your Supabase **service_role** key |
+
+The `daily.yml` workflow runs `scraper/scraper.py` automatically every day at 8:00 AM IST, and can also be triggered manually from the Actions tab.
+
+### 5. Frontend
+
+```bash
+cd frontend
+cp .env.example .env.local   # fill in VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY
+npm install
+npm run dev
 ```
 
-The scraper runs automatically every day. No manual intervention needed.
+Deploy to Vercel with **Root Directory** set to `frontend` and the same two env vars configured in the Vercel project settings.
 
----
+## Development
 
-## 🛠️ Manual Run
+All commands run from `frontend/`:
 
-You can trigger the scraper anytime from: **GitHub repo → Actions → Daily Job Scraper → Run workflow**
-
----
-
-## 💰 Monthly Cost Breakdown
-
-| Service | Usage | Cost |
-|---------|-------|------|
-| Apify | 1 LinkedIn (maxItems=10) + 5 Indeed + 1 Naukri = 7 actor runs/day × 30 days | ~$1.50–$2.50 (within free $5 credits) |
-| Supabase | ~5 MB/month of job data | Free (500 MB limit) |
-| GitHub Actions | ~5 min/day runtime | Free |
-| Vercel | Static site hosting | Free |
-| **Total** | | **~$0/month** ✅ |
-
----
-
-## 🔧 Customization
-
-### Change Job Roles
-Edit the `JOB_ROLES` list in `scraper/scraper.py`:
-```python
-JOB_ROLES = [
-    "Data Engineer",
-    "Data Analyst",
-    # Add or remove roles here
-]
+```bash
+npm run dev         # start the Vite dev server
+npm run lint         # ESLint
+npm run typecheck   # tsc --noEmit
+npm run test         # Vitest, watch mode
+npm run test:run     # Vitest, single run
+npm run build        # production build
 ```
 
-### Change Location
-Edit the LinkedIn URL and Indeed input in `scraper.py` — search for `Gurgaon` and replace with your city.
+`frontend-ci.yml` runs lint, typecheck, tests, and the build on every push and pull request that touches `frontend/`.
 
-### Change Schedule
-Edit `.github/workflows/daily.yml` — change the cron expression. Use [crontab.guru](https://crontab.guru) to help.
-
----
-
-## 📋 Job Roles Tracked
-
-**Naukri** (all 10 roles via bulk call):
-Data Engineer, Data Analyst, Business Analyst, Analytics Engineer, ETL Developer, BI Developer, SQL Developer, Python Developer, Backend Engineer, Product Analyst
-
-**LinkedIn** (1 role, billing capped):
-Data Engineer
-
-**Indeed** (5 roles):
-Data Engineer, Data Analyst, Business Analyst, Python Developer, Backend Engineer
-
----
-
-## 🤝 Tech Stack
-
-- **Python 3.11** — scraper logic
-- **Apify REST API** — web scraping actors for LinkedIn, Naukri, Indeed
-- **Supabase** — PostgreSQL database with REST API
-- **GitHub Actions** — daily cron scheduler
-- **Vanilla HTML/CSS/JS** — frontend dashboard
-- **Vercel** — static site hosting
+The codebase is mid-migration from JavaScript to TypeScript: `tsconfig.json` has `allowJs: true` so `.jsx`/`.js` files coexist with `.tsx`/`.ts` files, and new/converted files are typed incrementally rather than all at once.
