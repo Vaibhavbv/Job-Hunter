@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'motion/react'
-import { useTheme } from '../hooks/useTheme'
 import { useAuth } from '../hooks/useAuth'
 
 const navItems = [
@@ -15,7 +14,6 @@ const navItems = [
 ]
 
 export default function Navbar() {
-  const { theme, toggle } = useTheme()
   const { user, profile, signOut } = useAuth()
   const location = useLocation()
   const navigate = useNavigate()
@@ -96,19 +94,8 @@ export default function Navbar() {
           })}
         </nav>
 
-        {/* Right side: Theme + User */}
+        {/* Right side: User */}
         <div className="flex items-center gap-2">
-          {/* Theme Toggle */}
-          <motion.button
-            onClick={toggle}
-            className="w-8 h-8 rounded-lg flex items-center justify-center text-dark-muted hover:text-white hover:bg-dark-hover transition-colors"
-            whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 0.9 }}
-            aria-label="Toggle theme"
-          >
-            {theme === 'dark' ? '☀' : '☽'}
-          </motion.button>
-
           {/* User Avatar */}
           {user && (
             <div className="relative" ref={menuRef}>

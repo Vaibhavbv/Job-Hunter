@@ -4,7 +4,6 @@ export default {
     "./index.html",
     "./src/**/*.{js,jsx}",
   ],
-  darkMode: 'class',
   theme: {
     extend: {
       colors: {
@@ -37,11 +36,6 @@ export default {
         'status-interview':  '#fbbf24',
         'status-offer':      '#00ff88',
         'status-rejected':   '#ef4444',
-
-        // Light mode overrides
-        'light-bg':    '#f8f9fb',
-        'light-card':  '#ffffff',
-        'light-border':'#e2e4ea',
       },
       fontFamily: {
         mono:    ['"JetBrains Mono"', 'Fira Code', 'monospace'],

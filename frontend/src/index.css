@@ -276,36 +276,6 @@
 }
 
 /* ============================================================
-   Light Mode Overrides
-   ============================================================ */
-html:not(.dark) body {
-  @apply bg-light-bg text-gray-900;
-}
-
-html:not(.dark) ::-webkit-scrollbar-track {
-  background: #f8f9fb;
-}
-
-html:not(.dark) ::-webkit-scrollbar-thumb {
-  background: #d1d5db;
-}
-
-html:not(.dark) .glass {
-  background: rgba(255, 255, 255, 0.8);
-  border-color: rgba(0, 0, 0, 0.06);
-}
-
-html:not(.dark) .premium-input {
-  @apply bg-white/80 border-gray-200 text-gray-900;
-}
-
-html:not(.dark) .auth-card {
-  background: rgba(255, 255, 255, 0.9);
-  border-color: rgba(0, 0, 0, 0.08);
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.1);
-}
-
-/* ============================================================
    Utility: Line Clamp
    ============================================================ */
 .line-clamp-1 {
