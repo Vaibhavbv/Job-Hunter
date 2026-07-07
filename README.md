@@ -102,6 +102,8 @@ job-hunter/
 | `evaluate-jobs` | 5-dimension Gemini scoring of jobs against the user's profile |
 | `score-jobs` | Lightweight scoring path (no full evaluation) |
 | `check-credits` | Reports remaining Apify/Gemini usage budget |
+| `razorpay-checkout` | Creates a Razorpay order for a plan or credit pack (price resolved server-side) |
+| `razorpay-webhook` | Razorpay webhook target — verifies signature, grants subscriptions/credits idempotently |
 
 ## Setup
 
@@ -112,13 +114,13 @@ job-hunter/
 3. Under Settings → API, copy the **Project URL**, **anon public key**, and **service_role key**.
 4. Deploy the Edge Functions with the [Supabase CLI](https://supabase.com/docs/guides/cli):
    ```bash
-   supabase functions deploy fetch-jobs ingest-webhook parse-resume rewrite-resume evaluate-jobs score-jobs check-credits
+   supabase functions deploy fetch-jobs ingest-webhook parse-resume rewrite-resume evaluate-jobs score-jobs check-credits razorpay-checkout razorpay-webhook
    ```
 5. Set the Edge Function secrets (see `supabase/.env.example` for what each one is for):
    ```bash
-   supabase secrets set GEMINI_API_KEY=... APIFY_TOKEN=...
+   supabase secrets set GEMINI_API_KEY=... APIFY_TOKEN=... RAZORPAY_KEY_ID=... RAZORPAY_KEY_SECRET=... RAZORPAY_WEBHOOK_SECRET=...
    ```
-   `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` are auto-injected by Supabase into every deployed function — you don't set those yourself.
+   `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` are auto-injected by Supabase into every deployed function — you don't set those yourself. The Razorpay secrets are only needed once billing goes live (see `docs/ROADMAP.md`, Phase A); create the webhook in the Razorpay dashboard pointing at `<project>.supabase.co/functions/v1/razorpay-webhook` with the `payment.captured` event.
 
 ### 2. Apify
 
