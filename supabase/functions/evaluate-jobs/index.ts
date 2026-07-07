@@ -1,5 +1,11 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.0";
+import {
+  adminClient,
+  getEntitlement,
+  limitResponse,
+  settleUsage,
+} from "../_shared/entitlements.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -340,6 +346,20 @@ serve(async (req: Request) => {
       );
     }
 
+    // --- Entitlement gate (fails open when billing isn't deployed) ---
+    const admin = adminClient();
+    const entitlement = await getEntitlement(admin, user.id, "eval");
+    if (entitlement.allowance <= 0) {
+      return new Response(JSON.stringify(limitResponse("eval", entitlement)), {
+        status: 402,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (Number.isFinite(entitlement.allowance) && jobsToEvaluate.length > entitlement.allowance) {
+      // Evaluate what the allowance covers instead of rejecting outright.
+      jobsToEvaluate = jobsToEvaluate.slice(0, entitlement.allowance);
+    }
+
     // --- Batch evaluate ---
     const allEvaluations: any[] = [];
 
@@ -421,6 +441,16 @@ serve(async (req: Request) => {
         console.error("Failed to upsert evaluations:", upsertError);
         throw new Error("Failed to save evaluations");
       }
+
+      // Debit credits for the actions beyond the free monthly allowance.
+      await settleUsage(
+        admin,
+        user.id,
+        "eval",
+        allEvaluations.length,
+        entitlement,
+        `evaluate-jobs:${allEvaluations.length}`,
+      );
     }
 
     // Return all evaluations for this user

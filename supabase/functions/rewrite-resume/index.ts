@@ -1,5 +1,11 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.0";
+import {
+  adminClient,
+  getEntitlement,
+  limitResponse,
+  settleUsage,
+} from "../_shared/entitlements.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -150,6 +156,16 @@ serve(async (req: Request) => {
       }
     }
 
+    // --- Entitlement gate (fails open when billing isn't deployed) ---
+    const admin = adminClient();
+    const entitlement = await getEntitlement(admin, user.id, "resume_rewrite");
+    if (entitlement.allowance < 1) {
+      return new Response(JSON.stringify(limitResponse("resume_rewrite", entitlement)), {
+        status: 402,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // Build prompt and call Gemini
     const prompt = buildRewritePrompt(session.resume_text, jobTitle, jobCompany, jobDescription);
 
@@ -210,6 +226,16 @@ serve(async (req: Request) => {
       console.error("Failed to save tailored resume:", saveError);
       // Don't fail the request — still return the resume
     }
+
+    // Debit credits if this rewrite fell beyond the free monthly allowance.
+    await settleUsage(
+      admin,
+      user.id,
+      "resume_rewrite",
+      1,
+      entitlement,
+      savedResume?.id ? `resume:${savedResume.id}` : "resume:unsaved",
+    );
 
     return new Response(
       JSON.stringify({

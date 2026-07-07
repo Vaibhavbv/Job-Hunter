@@ -3,6 +3,7 @@ import { motion, AnimatePresence, type Variants } from 'motion/react'
 import { useNavigate } from 'react-router-dom'
 import { useSession } from '../hooks/useSession'
 import { useEvaluations } from '../hooks/useEvaluations'
+import { useToast } from '../components/Toast'
 import ResumeRewriteModal from '../components/ResumeRewriteModal'
 import CreditBadge from '../components/CreditBadge'
 import type { Evaluation, Recommendation } from '../types/database'
@@ -60,6 +61,7 @@ const SORT_OPTIONS: { key: 'score' | 'grade'; label: string }[] = [
 
 export default function AIDashboard() {
   const navigate = useNavigate()
+  const toast = useToast()
   const { sessionId, jobTitles, error: sessionError, clearSession } = useSession()
   const {
     evaluations,
@@ -106,8 +108,10 @@ export default function AIDashboard() {
       await evaluate([], sessionId)
     } catch (err) {
       console.error('Evaluation failed:', err)
+      // Surfaces the server's message — including the 402 plan-limit one.
+      toast.error(err instanceof Error ? err.message : 'Evaluation failed — please try again')
     }
-  }, [evaluate, sessionId])
+  }, [evaluate, sessionId, toast])
 
   const handleNewResume = () => {
     clearSession()
