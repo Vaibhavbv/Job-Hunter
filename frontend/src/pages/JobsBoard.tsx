@@ -49,7 +49,7 @@ const PLATFORM_STYLES: Record<Platform, { dot: string; activeBg: string; activeB
 type BookmarkId = number | string
 
 export default function JobsBoard() {
-  const { jobs, allJobs, loading, filters, setFilters, filterOptions, stats } = useJobs()
+  const { jobs, allJobs, loading, error, filters, setFilters, filterOptions, stats } = useJobs()
   const { profile } = useAuth()
   const { evaluations } = useEvaluations()
   const [selectedJob, setSelectedJob] = useState<Job | null>(null)
@@ -372,6 +372,16 @@ export default function JobsBoard() {
             <div key={i} className="h-16 skeleton rounded-xl" />
           ))}
         </div>
+      ) : error ? (
+        <motion.div
+          className="text-center py-24 bg-dark-card border border-red-500/20 rounded-2xl"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+        >
+          <span className="text-5xl">⚠</span>
+          <h3 className="font-display font-bold text-xl mt-4">Failed to load jobs</h3>
+          <p className="text-red-400 text-sm font-mono mt-2">{error}</p>
+        </motion.div>
       ) : displayJobs.length === 0 ? (
         <motion.div
           className="text-center py-24 bg-dark-card border border-dark-border rounded-2xl"

@@ -75,7 +75,7 @@ const DIMENSION_KEYS = [
 ] as const
 
 export default function Dashboard() {
-  const { allJobs, loading: jobsLoading, stats: jobStats } = useJobs()
+  const { allJobs, loading: jobsLoading, stats: jobStats, error: jobsError } = useJobs()
   const { evaluations, loading: evalsLoading, stats: evalStats } = useEvaluations()
 
   const loading = jobsLoading || evalsLoading
@@ -158,6 +158,13 @@ export default function Dashboard() {
           </div>
         )}
       </motion.div>
+
+      {/* Jobs query error (evaluations errors are intentionally swallowed by the hook) */}
+      {jobsError && (
+        <div className="mb-6 bg-red-500/10 border border-red-500/20 rounded-xl p-4 text-red-400 text-sm font-mono">
+          ✗ Failed to load jobs: {jobsError}
+        </div>
+      )}
 
       {/* ─── STAT CARDS ─── */}
       {loading ? (

@@ -18,7 +18,8 @@ const STATUS_COLORS: Record<TrackerStatus, { bg: string; border: string; text: s
 }
 
 export default function Tracker() {
-  const { columns, columnNames, addApplication, moveApplication, removeApplication } = useTracker()
+  const { columns, columnNames, loading, error, addApplication, moveApplication, removeApplication } =
+    useTracker()
   const { allJobs } = useJobs()
   const [showAddModal, setShowAddModal] = useState(false)
   const [draggedApp, setDraggedApp] = useState<ApplicationTracker | null>(null)
@@ -52,6 +53,19 @@ export default function Tracker() {
     [draggedApp, moveApplication],
   )
 
+  // Skeleton columns during the initial fetch (mirrors the Analytics loading pattern)
+  if (loading) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-12">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {Array.from({ length: 4 }, (_, i) => (
+            <div key={i} className="h-[400px] skeleton rounded-2xl" />
+          ))}
+        </div>
+      </div>
+    )
+  }
+
   return (
     <motion.div
       className="max-w-7xl mx-auto px-4 sm:px-6 pb-12"
@@ -82,6 +96,13 @@ export default function Tracker() {
           + Add Application
         </motion.button>
       </motion.div>
+
+      {/* Load error */}
+      {error && (
+        <div className="mb-4 bg-red-500/10 border border-red-500/20 rounded-xl p-4 text-red-400 text-sm font-mono">
+          ✗ Failed to load applications: {error}
+        </div>
+      )}
 
       {/* Kanban Board */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

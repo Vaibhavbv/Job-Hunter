@@ -37,7 +37,7 @@ const DIMENSION_KEYS = [
 ] as const
 
 export default function Analytics() {
-  const { allJobs, loading: jobsLoading } = useJobs()
+  const { allJobs, loading: jobsLoading, error: jobsError } = useJobs()
   const { evaluations, loading: evalsLoading } = useEvaluations()
 
   const loading = jobsLoading || evalsLoading
@@ -184,6 +184,13 @@ export default function Analytics() {
           {allJobs.length} jobs scraped · {evaluations.length} evaluated · 90-day window
         </p>
       </motion.div>
+
+      {/* Jobs query error (evaluations errors are intentionally swallowed by the hook) */}
+      {jobsError && (
+        <div className="mb-6 bg-red-500/10 border border-red-500/20 rounded-xl p-4 text-red-400 text-sm font-mono">
+          ✗ Failed to load jobs: {jobsError}
+        </div>
+      )}
 
       {/* ─── APPLICATION FUNNEL ─── */}
       {evaluations.length > 0 && (
