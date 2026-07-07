@@ -2,8 +2,11 @@ import { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence, type Variants } from 'motion/react'
 import { useJobs } from '../hooks/useJobs'
 import { useAuth } from '../hooks/useAuth'
+import { useEntitlements } from '../hooks/useEntitlements'
 import { supabase } from '../hooks/useSupabase'
 import { useQueryClient } from '@tanstack/react-query'
+import { useToast } from '../components/Toast'
+import { openCheckout } from '../services/razorpay'
 import type { UserFilter } from '../types/database'
 
 const item: Variants = {
@@ -489,6 +492,9 @@ export default function Settings() {
         </div>
       </motion.div>
 
+      {/* Billing & Credits */}
+      <BillingSection />
+
       {/* Supabase Connection */}
       <motion.div variants={item} className="bg-dark-card border border-dark-border rounded-2xl p-5 mb-4">
         <h3 className="font-mono text-xs text-dark-muted uppercase tracking-wider mb-4">Database Connection</h3>
@@ -556,5 +562,152 @@ function InfoRow({ label, value }: { label: string; value: string }) {
       <span className="text-[11px] font-mono text-dark-muted">{label}</span>
       <span className="text-[11px] font-mono text-white">{value}</span>
     </div>
+  )
+}
+
+/* ─── Billing & Credits ─────────────────────────────── */
+
+function UsageRow({ label, used, limit }: { label: string; used: number; limit: number | null }) {
+  const unlimited = limit == null
+  const pct = unlimited ? 0 : Math.min(100, Math.round((used / Math.max(1, limit)) * 100))
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-[11px] font-mono text-dark-muted">{label}</span>
+        <span className="text-[11px] font-mono text-white">
+          {unlimited ? `${used} · unlimited` : `${used} / ${limit}`}
+        </span>
+      </div>
+      {!unlimited && (
+        <div className="h-1 rounded-full bg-dark-border overflow-hidden">
+          <div
+            className={`h-full rounded-full ${pct >= 100 ? 'bg-red-400' : 'bg-accent'}`}
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+      )}
+    </div>
+  )
+}
+
+function BillingSection() {
+  const toast = useToast()
+  const { user, profile } = useAuth()
+  const {
+    loading,
+    billingAvailable,
+    plan,
+    planId,
+    plans,
+    creditPacks,
+    subscription,
+    credits,
+    evalsUsed,
+    rewritesUsed,
+    refetch,
+  } = useEntitlements()
+  const [buying, setBuying] = useState<string | null>(null)
+
+  const buy = async (itemType: 'plan' | 'credit_pack', itemId: string) => {
+    setBuying(itemId)
+    try {
+      await openCheckout({
+        itemType,
+        itemId,
+        prefill: { email: user?.email, name: profile?.full_name || undefined },
+        onSuccess: () => {
+          toast.success('Payment received — your account will update in a few seconds')
+          // The webhook is the source of truth; give it a moment to land.
+          setTimeout(() => refetch(), 4000)
+        },
+      })
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Checkout failed — please try again')
+    } finally {
+      setBuying(null)
+    }
+  }
+
+  const isFree = planId === 'free'
+  const paidPlans = plans.filter((p) => p.price_inr > 0 && p.is_active)
+  const periodEnd = subscription?.current_period_end
+    ? new Date(subscription.current_period_end).toLocaleDateString()
+    : null
+
+  return (
+    <motion.div variants={item} className="bg-dark-card border border-dark-border rounded-2xl p-5 mb-4">
+      <div className="flex justify-between items-center mb-4">
+        <h3 className="font-mono text-xs text-dark-muted uppercase tracking-wider">Billing & Credits</h3>
+        <span
+          className={`text-[10px] font-mono px-2 py-0.5 rounded ${
+            isFree ? 'bg-dark-border text-dark-muted' : 'bg-accent/10 text-accent'
+          }`}
+        >
+          {plan?.name || 'Free'}
+        </span>
+      </div>
+
+      {loading ? (
+        <div className="text-xs text-dark-muted font-mono animate-pulse">Loading billing…</div>
+      ) : !billingAvailable ? (
+        <p className="text-xs text-dark-muted font-mono">
+          Billing isn&apos;t enabled on this deployment yet — apply the billing migration and
+          configure the Razorpay keys (see docs/ROADMAP.md, Phase A).
+        </p>
+      ) : (
+        <div className="space-y-5">
+          {/* Current usage */}
+          <div className="space-y-3">
+            <UsageRow label="AI evaluations this month" used={evalsUsed} limit={plan?.monthly_evals ?? null} />
+            <UsageRow label="Resume tailors this month" used={rewritesUsed} limit={plan?.monthly_rewrites ?? null} />
+            <InfoRow label="Credit balance" value={`${credits} credits`} />
+            {periodEnd && <InfoRow label="Current period ends" value={periodEnd} />}
+          </div>
+
+          {/* Upgrade */}
+          {isFree && paidPlans.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {paidPlans.map((p) => (
+                <motion.button
+                  key={p.id}
+                  onClick={() => buy('plan', p.id)}
+                  disabled={buying !== null}
+                  className="premium-btn px-4 py-2 rounded-xl text-xs disabled:opacity-50"
+                  whileTap={{ scale: 0.97 }}
+                >
+                  {buying === p.id
+                    ? 'Opening checkout…'
+                    : `${p.name} — ₹${p.price_inr.toLocaleString('en-IN')}/${p.billing_interval === 'year' ? 'yr' : 'mo'}`}
+                </motion.button>
+              ))}
+            </div>
+          )}
+
+          {/* Credit packs */}
+          {creditPacks.length > 0 && (
+            <div>
+              <p className="text-[11px] font-mono text-dark-muted mb-2">
+                Top up credits (1 credit = 1 evaluation · 3 = 1 resume tailor)
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {creditPacks.map((pack) => (
+                  <motion.button
+                    key={pack.id}
+                    onClick={() => buy('credit_pack', pack.id)}
+                    disabled={buying !== null}
+                    className="px-3 py-2 rounded-xl border border-dark-border bg-dark-bg text-xs font-mono text-dark-muted hover:text-white hover:border-accent/30 transition-colors disabled:opacity-50"
+                    whileTap={{ scale: 0.97 }}
+                  >
+                    {buying === pack.id
+                      ? 'Opening…'
+                      : `${pack.credits} credits — ₹${pack.price_inr.toLocaleString('en-IN')}`}
+                  </motion.button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </motion.div>
   )
 }

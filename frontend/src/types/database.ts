@@ -56,8 +56,68 @@ export interface Profile {
   preferred_locations: string[]
   min_salary: number | null
   experience_years: number | null
+  /** Denormalized current-plan pointer maintained by razorpay-webhook. */
+  plan: string
   created_at: string
   updated_at: string
+}
+
+export type SubscriptionStatus =
+  | 'created'
+  | 'trialing'
+  | 'active'
+  | 'past_due'
+  | 'canceled'
+  | 'expired'
+
+/** `plans` table — public pricing catalog. Prices in whole INR. */
+export interface Plan {
+  id: string
+  name: string
+  price_inr: number
+  billing_interval: 'none' | 'month' | 'year'
+  /** null = unlimited */
+  monthly_evals: number | null
+  /** null = unlimited */
+  monthly_rewrites: number | null
+  features: Record<string, boolean>
+  is_active: boolean
+  created_at: string
+}
+
+/** `credit_packs` table — one-time credit top-ups. */
+export interface CreditPack {
+  id: string
+  name: string
+  price_inr: number
+  credits: number
+  is_active: boolean
+  created_at: string
+}
+
+/** `subscriptions` table — prepaid billing periods (see 20260707_billing.sql). */
+export interface Subscription {
+  id: string
+  user_id: string
+  plan_id: string
+  status: SubscriptionStatus
+  razorpay_order_id: string | null
+  razorpay_payment_id: string | null
+  razorpay_subscription_id: string | null
+  current_period_start: string | null
+  current_period_end: string | null
+  created_at: string
+  updated_at: string
+}
+
+/** `credit_ledger` table — append-only; balance = sum(delta). */
+export interface CreditLedgerEntry {
+  id: number
+  user_id: string
+  delta: number
+  reason: 'purchase' | 'referral' | 'eval' | 'resume_rewrite' | 'admin_adjust' | string
+  ref: string | null
+  created_at: string
 }
 
 /** `evaluations` table — 5-dimension AI scoring per user x job. */

@@ -144,3 +144,26 @@ export interface CheckCreditsResult {
 export async function checkCredits(): Promise<CheckCreditsResult> {
   return callFunction('check-credits')
 }
+
+// ---------------------------------------------------------------------------
+// Billing (Razorpay)
+// ---------------------------------------------------------------------------
+
+export interface CheckoutOrderResult {
+  order_id: string
+  amount: number
+  currency: string
+  key_id: string
+  item_name: string
+}
+
+/**
+ * Create a Razorpay order for a plan or credit pack. The price is resolved
+ * server-side from the catalog — this only names the item.
+ */
+export async function createCheckoutOrder(
+  itemType: 'plan' | 'credit_pack',
+  itemId: string,
+): Promise<CheckoutOrderResult> {
+  return callFunction('razorpay-checkout', { item_type: itemType, item_id: itemId })
+}
