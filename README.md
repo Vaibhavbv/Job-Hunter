@@ -53,6 +53,17 @@ The scraper itself is a thin orchestrator — it only queries `user_filters` and
 
 See `CHANGELOG.md` for the version history of these features.
 
+## Product & Roadmap
+
+Turning Job Hunter from a personal tool into a sellable, India-first product:
+
+- **[docs/PRODUCT_STRATEGY.md](docs/PRODUCT_STRATEGY.md)** — positioning ("AI Application
+  Copilot"), ICP, hybrid pricing (Free + Credits + Pro), unit economics, GTM, and the 90-day
+  launch plan.
+- **[docs/ROADMAP.md](docs/ROADMAP.md)** — the phased build plan (monetization spine →
+  conversion funnel → retention loops → trust/ops → expansion) with acceptance criteria and
+  tracked tech debt.
+
 ## Project Structure
 
 ```
