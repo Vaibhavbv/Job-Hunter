@@ -8,8 +8,13 @@ import {
 } from 'react'
 import type { User } from '@supabase/supabase-js'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { supabase } from './useSupabase'
+import { supabase, isSupabaseConfigured } from './useSupabase'
 import type { Profile } from '../types/database'
+
+const NOT_CONFIGURED_MESSAGE =
+  'The app is not connected to its backend (Supabase environment variables are missing at ' +
+  'build time). If you deployed this, set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY and ' +
+  'redeploy.'
 
 interface AuthContextValue {
   user: User | null
@@ -92,6 +97,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const loading = loadingUser || (!!user && loadingProfile)
 
   const signUp = useCallback(async (email: string, password: string, fullName: string) => {
+    if (!isSupabaseConfigured) throw new Error(NOT_CONFIGURED_MESSAGE)
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -104,6 +110,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const signIn = useCallback(async (email: string, password: string) => {
+    if (!isSupabaseConfigured) throw new Error(NOT_CONFIGURED_MESSAGE)
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
