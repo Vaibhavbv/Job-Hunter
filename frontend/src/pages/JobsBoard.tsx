@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback, type ReactNode } from 'react'
+import { Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'motion/react'
 import { FixedSizeList as List, type ListChildComponentProps } from 'react-window'
 import { useJobs, type DateRange, type JobSort } from '../hooks/useJobs'
@@ -211,6 +212,28 @@ export default function JobsBoard() {
           )}
         </div>
       </motion.div>
+
+      {/* Onboarding nudge: AI grades need a resume — the activation "aha" */}
+      {profile && !profile.base_resume && (
+        <motion.div
+          className="mb-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-accent/5 border border-accent/20 rounded-2xl px-5 py-4"
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+        >
+          <div>
+            <p className="text-sm font-body">
+              <span className="text-accent font-semibold">Unlock AI match grades.</span> Upload
+              your resume once and every job below gets scored A+–F against your profile.
+            </p>
+          </div>
+          <Link
+            to="/upload"
+            className="shrink-0 px-4 py-2 rounded-xl bg-accent/10 text-accent border border-accent/20 font-mono text-xs font-bold hover:bg-accent/20 transition-colors"
+          >
+            Upload resume →
+          </Link>
+        </motion.div>
+      )}
 
       {/* ─── INLINE STATS ─── */}
       <motion.div

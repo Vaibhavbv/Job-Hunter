@@ -6,7 +6,7 @@ import SplashScreen from './components/SplashScreen'
 import { ToastProvider } from './components/Toast'
 import CommandPalette from './components/CommandPalette'
 import ErrorBoundary from './components/ErrorBoundary'
-import { AuthProvider } from './hooks/useAuth'
+import { AuthProvider, useAuth } from './hooks/useAuth'
 import ProtectedRoute from './components/ProtectedRoute'
 
 // Lazy-loaded pages
@@ -18,6 +18,11 @@ const Analytics = lazy(() => import('./pages/Analytics'))
 const Settings = lazy(() => import('./pages/Settings'))
 const ResumeUpload = lazy(() => import('./pages/ResumeUpload'))
 const AIDashboard = lazy(() => import('./pages/AIDashboard'))
+// Public (logged-out) pages
+const Landing = lazy(() => import('./pages/Landing'))
+const Pricing = lazy(() => import('./pages/Pricing'))
+const ResumeScore = lazy(() => import('./pages/ResumeScore'))
+const Legal = lazy(() => import('./pages/Legal'))
 
 // Loading fallback with shimmer
 function PageLoader() {
@@ -28,6 +33,32 @@ function PageLoader() {
         <span className="text-dark-muted font-mono text-sm">Loading module...</span>
       </div>
     </div>
+  )
+}
+
+// "/" is the marketing landing for strangers and the jobs board for users.
+function HomeRoute() {
+  const { user, loading } = useAuth()
+  if (loading) return <PageLoader />
+  return user ? (
+    <ProtectedRoute>
+      <JobsBoard />
+    </ProtectedRoute>
+  ) : (
+    <Landing />
+  )
+}
+
+// In-app chrome (navbar + command palette) only exists for signed-in users;
+// public pages bring their own PublicHeader.
+function AuthedChrome() {
+  const { user } = useAuth()
+  if (!user) return null
+  return (
+    <>
+      <Navbar />
+      <CommandPalette />
+    </>
   )
 }
 
@@ -54,26 +85,21 @@ export default function App() {
             {/* Subtle noise overlay on all pages */}
             <div className="noise-overlay" />
 
-            {/* Only show navbar when not on auth page */}
-            {!isAuthPage && <Navbar />}
-            {!isAuthPage && <CommandPalette />}
+            {/* In-app chrome renders only for signed-in users, never on /auth */}
+            {!isAuthPage && <AuthedChrome />}
 
             <main className={isAuthPage ? '' : 'pt-4'}>
               <AnimatePresence mode="wait">
                 <Suspense fallback={<PageLoader />} key={location.pathname}>
                   <Routes location={location}>
-                    {/* Public route */}
+                    {/* Public routes */}
                     <Route path="/auth" element={<AuthPage />} />
+                    <Route path="/pricing" element={<Pricing />} />
+                    <Route path="/tools/resume-score" element={<ResumeScore />} />
+                    <Route path="/legal" element={<Legal />} />
 
-                    {/* Protected routes */}
-                    <Route
-                      path="/"
-                      element={
-                        <ProtectedRoute>
-                          <JobsBoard />
-                        </ProtectedRoute>
-                      }
-                    />
+                    {/* Landing for strangers, jobs board for users */}
+                    <Route path="/" element={<HomeRoute />} />
                     <Route
                       path="/dashboard"
                       element={

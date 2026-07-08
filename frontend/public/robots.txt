@@ -1,0 +1,10 @@
+User-agent: *
+Allow: /
+# App-only routes — nothing useful for crawlers behind auth
+Disallow: /dashboard
+Disallow: /tracker
+Disallow: /analytics
+Disallow: /settings
+Disallow: /upload
+Disallow: /ai-dashboard
+Disallow: /auth

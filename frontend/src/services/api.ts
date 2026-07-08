@@ -8,6 +8,7 @@ import { supabase } from '../hooks/useSupabase'
 import type { AiJob } from '../types/database'
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
 const FUNCTIONS_URL = `${SUPABASE_URL}/functions/v1`
 
 async function getAuthHeader(): Promise<string> {
@@ -166,4 +167,37 @@ export async function createCheckoutOrder(
   itemId: string,
 ): Promise<CheckoutOrderResult> {
   return callFunction('razorpay-checkout', { item_type: itemType, item_id: itemId })
+}
+
+// ---------------------------------------------------------------------------
+// Public (unauthenticated) tools
+// ---------------------------------------------------------------------------
+
+export interface AtsScoreResult {
+  ats_score: number
+  top_fixes: string[]
+  summary: string
+  remaining_today: number
+}
+
+/**
+ * Free anonymous ATS score — the ungated growth tool. Sends the anon key
+ * (not a user JWT); the function is deployed with --no-verify-jwt and
+ * rate-limits by IP.
+ */
+export async function scoreResumeAnonymous(resumeText: string): Promise<AtsScoreResult> {
+  const resp = await fetch(`${FUNCTIONS_URL}/ats-score`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+      apikey: SUPABASE_ANON_KEY,
+    },
+    body: JSON.stringify({ resume_text: resumeText }),
+  })
+  const data = await resp.json()
+  if (!resp.ok) {
+    throw new Error(data.error || `ats-score failed with status ${resp.status}`)
+  }
+  return data
 }
