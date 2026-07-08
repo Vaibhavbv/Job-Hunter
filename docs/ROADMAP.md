@@ -5,6 +5,16 @@
 > Effort estimates are rough (S = ~1–2 days, M = ~3–5 days, L = ~1–2 weeks) for a single
 > developer. Each phase has explicit acceptance criteria and a primary metric.
 
+## Status
+
+| Phase | State |
+|---|---|
+| **A — Monetization spine** | ✅ **Built.** Billing migration (`20260707_billing.sql`), `razorpay-checkout`/`razorpay-webhook`, entitlement guard (`functions/_shared/entitlements.ts`) enforcing limits in `evaluate-jobs`/`rewrite-resume` (fails open until the migration is applied), `useEntitlements` + Settings billing UI. **Remaining: operator setup** — apply the migration, create Razorpay test keys + webhook, set `RAZORPAY_*` secrets, run one test payment end-to-end, and validate real Gemini per-action cost. |
+| **B — Conversion funnel** | ✅ **Built.** Public landing `/`, `/pricing`, free ATS tool `/tools/resume-score` (+ `ats-score` function, deploy with `--no-verify-jwt`), `/legal`, OG/meta + robots.txt, JobsBoard resume-upload nudge. Remaining: programmatic SEO pages (needs the production domain), richer onboarding. |
+| **C — Retention loops** | ⬜ Not started — email + WhatsApp alerts and referrals need provider accounts (Resend/SES, WhatsApp Business API). |
+| **D — Trust & ops** | 🟨 Partial. Legal/DPDP/refund page shipped; CORS now env-locked via `ALLOWED_ORIGIN`; ats-score IP rate limit shipped. Remaining: Sentry/PostHog, data export/delete flows, broader rate limiting. |
+| **E — Expansion** | ⬜ Post-PMF. |
+
 ---
 
 ## Guardrails (apply to every phase)

@@ -104,6 +104,7 @@ job-hunter/
 | `check-credits` | Reports remaining Apify/Gemini usage budget |
 | `razorpay-checkout` | Creates a Razorpay order for a plan or credit pack (price resolved server-side) |
 | `razorpay-webhook` | Razorpay webhook target — verifies signature, grants subscriptions/credits idempotently |
+| `ats-score` | Public free resume ATS score (deploy with `--no-verify-jwt`; IP rate-limited, resume never stored) |
 
 ## Setup
 
@@ -115,6 +116,7 @@ job-hunter/
 4. Deploy the Edge Functions with the [Supabase CLI](https://supabase.com/docs/guides/cli):
    ```bash
    supabase functions deploy fetch-jobs ingest-webhook parse-resume rewrite-resume evaluate-jobs score-jobs check-credits razorpay-checkout razorpay-webhook
+   supabase functions deploy ats-score --no-verify-jwt
    ```
 5. Set the Edge Function secrets (see `supabase/.env.example` for what each one is for):
    ```bash
