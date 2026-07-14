@@ -8,8 +8,28 @@ import {
 } from 'react'
 import type { User } from '@supabase/supabase-js'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { supabase } from './useSupabase'
+import { supabase, isSupabaseConfigured } from './useSupabase'
 import type { Profile } from '../types/database'
+
+/**
+ * supabase-js throws a bare `TypeError: Failed to fetch` for any network-level
+ * failure (unreachable host, DNS, CORS, offline). Translate that into a
+ * message that tells the user/operator what's actually wrong instead of a
+ * cryptic browser error.
+ */
+function toFriendlyAuthError(err: unknown): Error {
+  if (!isSupabaseConfigured) {
+    return new Error(
+      'App is not configured: missing Supabase URL/API key. Contact the site administrator.',
+    )
+  }
+  if (err instanceof TypeError && err.message === 'Failed to fetch') {
+    return new Error(
+      'Could not reach the server. Check your internet connection and try again.',
+    )
+  }
+  return err instanceof Error ? err : new Error('Something went wrong')
+}
 
 interface AuthContextValue {
   user: User | null
@@ -92,24 +112,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const loading = loadingUser || (!!user && loadingProfile)
 
   const signUp = useCallback(async (email: string, password: string, fullName: string) => {
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: { full_name: fullName },
-      },
-    })
-    if (error) throw error
-    return data
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: { full_name: fullName },
+        },
+      })
+      if (error) throw error
+      return data
+    } catch (err) {
+      throw toFriendlyAuthError(err)
+    }
   }, [])
 
   const signIn = useCallback(async (email: string, password: string) => {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    })
-    if (error) throw error
-    return data
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      })
+      if (error) throw error
+      return data
+    } catch (err) {
+      throw toFriendlyAuthError(err)
+    }
   }, [])
 
   const signOut = useCallback(async () => {
